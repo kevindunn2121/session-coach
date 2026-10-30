@@ -1,6 +1,6 @@
 # Changelog
 
-All changes to session-coach, newest first. Pull request numbers refer to `Nterlace-Solutions/session-coach`.
+All changes to session-coach, newest first. Pull request numbers up to #5 refer to the earlier repository `Nterlace-Solutions/session-coach`.
 
 ## Unreleased
 

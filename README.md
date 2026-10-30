@@ -33,21 +33,21 @@ claude plugin install session-coach@session-coach
 
 To try it in one terminal session without installing, run `claude --plugin-dir <folder>`.
 
-To install from GitHub: this is a private repository. You need read access on GitHub and a git credential for github.com. To set up the credential, run `gh auth login`, then `gh auth setup-git`.
+To install from GitHub, use the public repository `TriMedx/session-coach`.
 
 In a Claude Code terminal session:
 
 ```text
-/plugin install session-coach --marketplace Nterlace-Solutions/session-coach
+/plugin install session-coach --marketplace TriMedx/session-coach
 ```
 
 From a shell:
 
 ```bash
-claude plugin install session-coach --marketplace Nterlace-Solutions/session-coach
+claude plugin install session-coach --marketplace TriMedx/session-coach
 ```
 
-In the desktop app, click + next to the prompt box, then Plugins. Add the marketplace `Nterlace-Solutions/session-coach`, then add the plugin.
+In the desktop app, click + next to the prompt box, then Plugins. Add the marketplace `TriMedx/session-coach`, then add the plugin.
 
 After an update, run `/reload-plugins` or start a new session. The plugin needs Claude Code 2.1.29x or newer, because the plugin hooks API is early access.
 
