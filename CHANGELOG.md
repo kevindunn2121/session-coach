@@ -1,0 +1,39 @@
+# Changelog
+
+All changes to session-coach, newest first. Pull request numbers refer to `Nterlace-Solutions/session-coach`.
+
+## Unreleased
+
+- The first setup audit runs at the first session start, before any session history exists, and judges your setup from a new `profile` option: by default an AI application and data engineer on Snowflake, Azure containers, Snowpark Container Services and GitHub. The audit also sees the names of stack files, such as `dbt_project.yml`, `Dockerfile` and GitHub Actions workflows. Expert analysis reads the profile too, and a profile change starts a new audit.
+- Feed posts are ranked by age as well as score. Posts from the last 7 days count in full, older posts halve each week, and the playbook model sees each post's age.
+- The Hermes inbox and the `inboxFile` option are removed. The coach always fetches its own feeds.
+- A `.claude-plugin/plugin.json` manifest that declares every option, and a `marketplace.json` for a local install.
+- macOS: tests use POSIX paths, and the pane uses `bold` instead of `weight`, which Claude Code 2.1.296 refuses.
+
+- Documentation: a new README layout, this changelog, and a CLAUDE.md for agents that work on the repository.
+- Documentation: an updated source-curator guide in `overview.md`, and a new line map snapshot from the playbook of 2026-10-29.
+
+## 2026-10-27
+
+- The coach writes the playbook line map again after every playbook build, and on `/coach map`, to `~/.claude/session-coach/playbook-line-map.html`. The playbook model gives each practice and tool a station. (#5)
+- A playbook line map in `docs/playbook-line-map.html`, also published as an artifact. It starts with a first prompt for any new project and runs through seven stations and two always-on lines. Every recommendation and setup card shows its station and links to it. A new `playbookUrl` option sets the link. (#4)
+
+## 2026-10-25
+
+- Recommendations are ranked P1 to P4 and tagged with a category. Rule tips and expert suggestions share one list. The pane is split into colored sections: Now, Recommendations, Vitals, Score, and Setup & feed. Setup cards are ranked the same way, and the band shows the priority of the top item. (#3)
+- Each fix has a timing: a `/btw` side question, now while Claude works, as the next prompt, after Esc, or after the session. After Put in prompt, the status line says what to press, based on whether Claude is working. (#2)
+- Each recommendation has an exact fix that says where the change goes and what to do next. Each fix has Put in prompt and Copy buttons, and the pane has Copy report. In the desktop app, Copy falls back to the prompt box and Copy report to a file. (#1)
+
+## 2026-10-24
+
+- Each coach job uses its own pinned model: Claude Sonnet 5.5 for the playbook, expert analysis and setup audit, and Claude Haiku 5.5 at low effort for the turn judge.
+- The setup audit reads your CLAUDE.md files, settings, agents, skills, plugins and MCP servers, and proposes changes with their effect on drift and token cost. Apply fills the prompt box, with Send to Claude and Copy as the fallback.
+- Vitals: plan usage, coach cost, cache hit rate, context runway, git state, permission asks and file churn, each with tips.
+- Button results show at the top of the pane, because toasts do not show in the desktop app.
+
+## 2026-10-16
+
+- The playbook can come from a Hermes inbox file, which a daily Hermes cron job writes. While the inbox is less than 26 hours old, the coach does not fetch the web itself.
+- A turn judge gives a verdict after every turn. The pane shows a score trail and the verdict history, and it opens at session start.
+- First version: live metrics, the score, rule tips, and the expert playbook from Reddit, blogs and X.
+- First version: expert analysis, the band, the pane, the `/coach` commands and the session report.

@@ -1,0 +1,88 @@
+{
+  "name": "session-coach",
+  "version": "0.6.0",
+  "description": "Coaches you while you work with Claude: a live session score, a turn judge, expert analysis and a setup audit, ranked P1 to P4 with exact fixes.",
+  "author": { "name": "Kevin Dunn" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "profile": {
+      "type": "string",
+      "title": "Your role and stack",
+      "description": "Who the setup audit and expert analysis advise. The first audit runs before any session history exists and judges your setup from this point of view.",
+      "default": "AI application and data engineer. Snowflake is the enterprise data warehouse (SQL, dbt, Snowpark, Cortex). Apps run in Azure containers (Container Apps, AKS, ACR) and Snowpark Container Services. Code lives in GitHub, with pull requests and GitHub Actions."
+    },
+    "subreddits": {
+      "type": "string",
+      "title": "Subreddits",
+      "description": "Comma-separated subreddits the coach reads through RSS.",
+      "default": "ClaudeAI,ClaudeCode,ChatGPTCoding,LocalLLaMA,AI_Agents"
+    },
+    "xHandles": {
+      "type": "string",
+      "title": "X accounts",
+      "description": "Comma-separated X handles, read only through the mirrors in xMirrors.",
+      "default": "bcherny,_catwu,alexalbert__,karpathy,swyx,simonw,HamelHusain,eugeneyan"
+    },
+    "xMirrors": {
+      "type": "string",
+      "title": "X mirrors",
+      "description": "Comma-separated RSS URL templates for X, with {handle}, for example https://your-nitter.example/{handle}/rss.",
+      "default": ""
+    },
+    "extraFeeds": {
+      "type": "string",
+      "title": "Expert feeds",
+      "description": "Comma-separated RSS or Atom feeds of expert blogs.",
+      "default": "https://simonwillison.net/atom/everything/,https://hamel.dev/index.xml,https://eugeneyan.com/rss/,https://www.latent.space/feed,https://karpathy.bearblog.dev/feed/,https://jxnl.co/feed_rss_created.xml,https://addyo.substack.com/feed"
+    },
+    "judgeTurns": {
+      "type": "boolean",
+      "title": "Judge every turn",
+      "description": "Give a verdict after every turn.",
+      "default": true
+    },
+    "openPane": {
+      "type": "string",
+      "title": "Open the pane",
+      "description": "auto opens the pane at session start. command opens it only from /coach or Details.",
+      "default": "auto",
+      "options": ["auto", "command"]
+    },
+    "playbookUrl": {
+      "type": "string",
+      "title": "Playbook link",
+      "description": "Where recommendations link for their station. Empty means the published line map.",
+      "default": ""
+    },
+    "analyzeEvery": {
+      "type": "number",
+      "title": "Turns between analyses",
+      "description": "Turns between expert analyses. 0 turns automatic analysis off.",
+      "default": 3
+    },
+    "playbookModel": {
+      "type": "string",
+      "title": "Playbook model",
+      "description": "The model that builds the playbook.",
+      "default": "claude-sonnet-5-5"
+    },
+    "analysisModel": {
+      "type": "string",
+      "title": "Analysis model",
+      "description": "The model for expert analysis and the setup audit.",
+      "default": "claude-sonnet-5-5"
+    },
+    "judgeModel": {
+      "type": "string",
+      "title": "Judge model",
+      "description": "The model for the turn judge.",
+      "default": "claude-haiku-5-5"
+    },
+    "obsidianDir": {
+      "type": "string",
+      "title": "Obsidian folder",
+      "description": "A folder to write the session report to at the end of each session. Empty turns it off.",
+      "default": ""
+    }
+  }
+}

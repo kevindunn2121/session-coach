@@ -1,0 +1,6 @@
+{
+  "name": "session-coach",
+  "description": "session-coach, a Claude Code plugin that coaches you while you work with Claude.",
+  "owner": { "name": "Kevin Dunn" },
+  "plugins": [{ "name": "session-coach", "source": "./" }]
+}
