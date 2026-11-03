@@ -1,5 +1,6 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
 
 import { emptyMetrics } from '../hooks/metrics'
 import { auditPrompt, measure, mcpServerNames, parseAgentFile, parseRecommendations, recommendationCard, redact, summarizeSettings } from '../hooks/setup'
@@ -59,7 +60,32 @@ test('recommendations parse, normalize and render with apply and skip outcomes',
   expect(card).toContain('| If you skip | ↑ more | ~+3k/session | Opus keeps doing reads / searches. |')
 })
 
-const setupWorld = (on: On, filled: string[], fillResult: { isFilled: boolean; refusal?: 'no_composer' } | 'hang' = { isFilled: true }, submitted: string[] = []) => {
+const PATCH_REPLY = JSON.stringify({
+  recommendations: [
+    {
+      id: 'deny-prod',
+      area: 'permissions',
+      title: 'Deny prod Snowflake SQL',
+      problem: 'Nothing stops a prod query.',
+      change: 'Add a deny rule.',
+      applyPrompt: 'Add Bash(snow sql:*) to permissions.deny in ~/.claude/settings.json.',
+      patch: { kind: 'settings-merge', target: '~/.claude/settings.json', set: { deny: ['Bash(snow sql:*)'] } },
+    },
+    {
+      id: 'safety-rule',
+      area: 'claude-md',
+      title: 'Write the DEV_ rule down',
+      problem: 'The rule is only in your head.',
+      change: 'Add it to CLAUDE.md.',
+      applyPrompt: 'Add the DEV_ rule to ~/.claude/CLAUDE.md.',
+      patch: { kind: 'claude-md-append', target: '~/.claude/CLAUDE.md', heading: '## Safety', lines: '- Ask before writing outside DEV_.' },
+    },
+  ],
+})
+
+type World = { reply?: string; files?: Record<string, string>; submitted?: string[]; isWriteBroken?: boolean }
+
+const setupWorld = (on: On, { reply = REPLY, files = {}, submitted = [], isWriteBroken = false }: World = {}) => {
   mock.store(on)
   const clock = mock.clock(on, { now: 1000 })
   mock.env(on, { HOME: '/Users/kevin' })
@@ -67,16 +93,17 @@ const setupWorld = (on: On, filled: string[], fillResult: { isFilled: boolean; r
   on('ui.open', () => ({ value: { isPlaced: true } as never }))
   on('fs.read', ($, e) => {
     const path = e.path.replaceAll('\\', '/')
-    if (path.endsWith('/.claude/CLAUDE.md') && path.startsWith('/Users/kevin/')) return { value: '# Rules\nDelegate reads to scout.' }
+    if (path in files) return { value: files[path]! }
     if (path.endsWith('scout.md')) return { value: '---\nname: scout\nmodel: haiku\n---' }
     throw new Error('missing')
   })
-  on('fs.list', ($, e) => ({ value: e.path.replaceAll('\\', '/').endsWith('/Users/kevin/.claude/agents') ? [{ name: 'scout.md', kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false }] : [] }))
-  on('model.complete', () => ({ value: { isAnswered: true as const, text: REPLY, usage: USAGE } }))
-  on('prompt.fill', ($, e) => {
-    filled.push(e.text)
-    return fillResult === 'hang' ? new Promise<never>(() => undefined) : fillResult
+  on('fs.write', ($, e) => {
+    if (isWriteBroken) throw new Error('read-only file system')
+    files[e.path.replaceAll('\\', '/')] = e.text
+    return { value: undefined }
   })
+  on('fs.list', ($, e) => ({ value: e.path.replaceAll('\\', '/').endsWith('/Users/kevin/.claude/agents') ? [{ name: 'scout.md', kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false }] : [] }))
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: reply, usage: USAGE } }))
   on('prompt.submit', ($, e) => {
     submitted.push(e.text)
     return { text: e.text }
@@ -88,25 +115,32 @@ const setupWorld = (on: On, filled: string[], fillResult: { isFilled: boolean; r
   return clock
 }
 
-test('/coach setup audits, Apply fills the prompt, Skip hides the card', { options: { judgeTurns: false, analyzeEvery: 0 } }, async ($, on) => {
-  const filled: string[] = []
-  setupWorld(on, filled)
+const mountSetup = ($: Engine, surface: 'terminal' | 'desktop' = 'desktop') =>
+  $.ui.mount({ plugin: 'session-coach', surface, component: 'Pane', requestId: 'session-coach-setup', props: { bodyColumns: 100 } as never })
+
+const SETTINGS = '/Users/kevin/.claude/settings.json'
+const CLAUDE_MD = '/Users/kevin/.claude/CLAUDE.md'
+
+test('/coach setup audits, Fix with Claude sends the instruction in one click, Skip hides the card', { options: { judgeTurns: false, analyzeEvery: 0 } }, async ($, on) => {
+  const submitted: string[] = []
+  setupWorld(on, { files: { [CLAUDE_MD]: '# Rules\nDelegate reads to scout.' }, submitted })
 
   const answer = await $.command.run({ command: 'coach', args: 'setup' } as never)
   expect(answer.text).toBe('- Your routing rule is never followed (agents): Add a SubagentStart reminder hook or soften the rule.')
 
   for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ plugin: 'session-coach', surface, component: 'Pane', requestId: 'session-coach-setup', props: { bodyColumns: 100 } as never })
+    const ui = await mountSetup($, surface)
     expect(await ui.find({ text: /Your routing rule is never followed/ })).toBeDefined()
     await ui.unmount()
   }
 
-  const ui = await $.ui.mount({ plugin: 'session-coach', surface: 'desktop', component: 'Pane', requestId: 'session-coach-setup', props: { bodyColumns: 100 } as never })
-  await ui.press({ key: 'apply-enforce-routing' })
-  expect(filled).toEqual(['Edit ~/.claude/CLAUDE.md: rewrite the Model routing table as concrete triggers. Show the diff first.'])
-  expect(await ui.find({ text: /The instruction is in your prompt box/ })).toBeDefined()
-  expect(await ui.find({ key: 'apply-enforce-routing' })).toBeUndefined()
-  expect(await ui.find({ key: 'send-enforce-routing' })).toBeDefined()
+  const ui = await mountSetup($)
+  expect(await ui.find({ key: 'fix-enforce-routing' })).toBeUndefined()
+  await ui.press({ key: 'send-enforce-routing' })
+  expect(submitted).toEqual(['Edit ~/.claude/CLAUDE.md: rewrite the Model routing table as concrete triggers. Show the diff first.'])
+  expect(await ui.find({ text: /Sent to Claude as your next prompt/ })).toBeDefined()
+  expect(await ui.find({ key: 'send-enforce-routing' })).toBeUndefined()
+  expect((await ui.find({ key: 'skip-enforce-routing' }))?.text).toContain('Done')
 
   await ui.press({ key: 'skip-enforce-routing' })
   expect(await ui.find({ text: /Your routing rule is never followed/ })).toBeUndefined()
@@ -114,36 +148,70 @@ test('/coach setup audits, Apply fills the prompt, Skip hides the card', { optio
   await ui.unmount()
 })
 
-test('when the prompt box refuses the fill, the card says so and Send to Claude submits it', { options: { judgeTurns: false, analyzeEvery: 0 } }, async ($, on) => {
-  const filled: string[] = []
+test('Fix writes a patch with a backup and a diff, and Undo puts the file back', { options: { judgeTurns: false, analyzeEvery: 0 } }, async ($, on) => {
   const submitted: string[] = []
-  setupWorld(on, filled, { isFilled: false, refusal: 'no_composer' }, submitted)
+  const before = '{\n  "model": "opus"\n}\n'
+  const files: Record<string, string> = { [SETTINGS]: before }
+  setupWorld(on, { reply: PATCH_REPLY, files, submitted })
   await $.command.run({ command: 'coach', args: 'setup' } as never)
 
-  const ui = await $.ui.mount({ plugin: 'session-coach', surface: 'desktop', component: 'Pane', requestId: 'session-coach-setup', props: { bodyColumns: 100 } as never })
-  await ui.press({ key: 'apply-enforce-routing' })
-  expect(await ui.find({ text: /prompt box can't be filled by a plugin/ })).toBeDefined()
-  expect((await ui.find({ key: 'text-enforce-routing' }))?.text).toContain('Edit ~/.claude/CLAUDE.md: rewrite the Model routing table')
-  expect(await ui.find({ key: 'copy-enforce-routing' })).toBeDefined()
+  const ui = await mountSetup($)
+  expect(await ui.find({ key: 'send-deny-prod' })).toBeUndefined()
+  await ui.press({ key: 'fix-deny-prod' })
+  expect(submitted).toEqual([])
+  expect(JSON.parse(files[SETTINGS]!)).toEqual({ model: 'opus', permissions: { deny: ['Bash(snow sql:*)'] } })
+  expect(files['/Users/kevin/.claude/session-coach/backups/deny-prod-1970-01-01T00-00-01-000Z-settings.json']).toBe(before)
+  expect(await ui.find({ text: /Changed `\/Users\/kevin\/\.claude\/settings\.json`\. It takes effect in your next session\./ })).toBeDefined()
+  expect((await ui.find({ key: 'text-deny-prod' }))?.text).toContain('+       "Bash(snow sql:*)"')
+  expect(await ui.find({ key: 'fix-deny-prod' })).toBeUndefined()
 
-  await ui.press({ key: 'send-enforce-routing' })
-  expect(submitted).toEqual(['Edit ~/.claude/CLAUDE.md: rewrite the Model routing table as concrete triggers. Show the diff first.'])
-  expect(await ui.find({ text: /Sent to Claude as your next prompt/ })).toBeDefined()
-  expect(await ui.find({ key: 'send-enforce-routing' })).toBeUndefined()
+  await ui.press({ key: 'undo-deny-prod' })
+  expect(files[SETTINGS]).toBe(before)
+  expect(await ui.find({ text: /Undone\./ })).toBeDefined()
+  expect(await ui.find({ key: 'fix-deny-prod' })).toBeDefined()
   await ui.unmount()
 })
 
-test('a prompt fill that never answers falls back to Send to Claude after 3 seconds', { options: { judgeTurns: false, analyzeEvery: 0 } }, async ($, on) => {
-  const filled: string[] = []
-  const clock = setupWorld(on, filled, 'hang')
+test('Undo leaves a file alone when it changed after the fix, and Fix writes nothing when the change is already there', { options: { judgeTurns: false, analyzeEvery: 0 } }, async ($, on) => {
+  const files: Record<string, string> = { [SETTINGS]: '{}\n', [CLAUDE_MD]: '# Rules\n\n## Safety\n- Ask before writing outside DEV_.\n' }
+  setupWorld(on, { reply: PATCH_REPLY, files })
   await $.command.run({ command: 'coach', args: 'setup' } as never)
 
-  const ui = await $.ui.mount({ plugin: 'session-coach', surface: 'desktop', component: 'Pane', requestId: 'session-coach-setup', props: { bodyColumns: 100 } as never })
-  const pressed = ui.press({ key: 'apply-enforce-routing' })
-  await clock.advance(3000)
-  await pressed
-  expect(await ui.find({ text: /prompt box can't be filled by a plugin/ })).toBeDefined()
-  expect(await ui.find({ key: 'send-enforce-routing' })).toBeDefined()
+  const ui = await mountSetup($)
+  await ui.press({ key: 'fix-deny-prod' })
+  files[SETTINGS] = '{"model": "haiku"}\n'
+  await ui.press({ key: 'undo-deny-prod' })
+  expect(files[SETTINGS]).toBe('{"model": "haiku"}\n')
+  expect(await ui.find({ text: /changed after the fix, so Undo left it alone\. The file before the fix is saved at/ })).toBeDefined()
+
+  await ui.press({ key: 'fix-safety-rule' })
+  expect(Object.keys(files).filter(path => path.includes('safety-rule'))).toEqual([])
+  expect(await ui.find({ text: /already has this change\. Nothing was written\./ })).toBeDefined()
+  expect(await ui.find({ key: 'undo-safety-rule' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a patch the plugin cannot write falls back to Fix with Claude', { options: { judgeTurns: false, analyzeEvery: 0 } }, async ($, on) => {
+  const submitted: string[] = []
+  setupWorld(on, { reply: PATCH_REPLY, files: { [SETTINGS]: '{"model": "opus",}' }, submitted })
+  await $.command.run({ command: 'coach', args: 'setup' } as never)
+
+  const ui = await mountSetup($)
+  await ui.press({ key: 'fix-deny-prod' })
+  expect(await ui.find({ text: /is not valid JSON, so the plugin will not rewrite it\. Press \*\*Fix with Claude\*\* instead\./ })).toBeDefined()
+  await ui.press({ key: 'send-deny-prod' })
+  expect(submitted).toEqual(['Add Bash(snow sql:*) to permissions.deny in ~/.claude/settings.json.'])
+  await ui.unmount()
+})
+
+test('a failed write says why and offers Fix with Claude', { options: { judgeTurns: false, analyzeEvery: 0 } }, async ($, on) => {
+  setupWorld(on, { reply: PATCH_REPLY, files: { [SETTINGS]: '{}\n' }, isWriteBroken: true })
+  await $.command.run({ command: 'coach', args: 'setup' } as never)
+
+  const ui = await mountSetup($)
+  await ui.press({ key: 'fix-deny-prod' })
+  expect((await ui.find({ key: 'text-deny-prod' }))?.text).toMatch(/The plugin could not make this change itself: [^\n]*\S\. Press \*\*Fix with Claude\*\* instead\./)
+  expect(await ui.find({ key: 'send-deny-prod' })).toBeDefined()
   await ui.unmount()
 })
 

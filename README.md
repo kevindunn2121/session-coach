@@ -156,9 +156,10 @@ Each card shows the problem, the evidence and the change. It also shows a fix yo
 
 The buttons on each card:
 
-1. Apply puts a ready-made instruction in your prompt box. Review it, then press Enter, and Claude makes the change under your normal permission prompts.
-2. If the prompt box cannot take the text, the card says so. Send to Claude then sends the instruction as your next prompt, and Copy copies it.
-3. Skip hides the card until your setup files change.
+1. Fix makes the change in one click, when the plugin can make it itself: lines added to a `CLAUDE.md`, or `model`, a short list of `env` settings, and `deny` or `ask` rules merged into a `.claude/settings.json`. The plugin saves the file to `~/.claude/session-coach/backups/` first, and the card shows the diff and when the change takes effect. If the change is already there, nothing is written.
+2. Undo puts the file back. If you edited the file after the fix, Undo leaves it alone and tells you where the backup is.
+3. Fix with Claude sends the instruction to Claude as your next prompt, in one click, for every other change: hooks, allow rules, skills, agents, MCP servers and new files. Claude makes the change under your normal permission prompts. If Fix cannot write a file, for example a `settings.json` that is not valid JSON, the card says why and offers Fix with Claude.
+4. Copy copies the instruction, and Skip hides the card until your setup files change.
 
 The first audit runs a few seconds after the coach's first session starts, before you send a prompt. With no session history yet, it judges your setup on its own, from the point of view in the `profile` option and against the playbook. The default profile is an AI application and data engineer on Snowflake, Azure containers, Snowpark Container Services and GitHub. The audit also sees the names, never the contents, of project files that show the stack, such as `dbt_project.yml`, `snowflake.yml`, `Dockerfile` and `.github/workflows/*`. Expert analysis reads the same profile.
 
@@ -254,7 +255,7 @@ The coach works in the Claude desktop app, with these differences from a termina
 
 - Toasts do not show. Button results show in the status line at the top of the pane instead.
 - Plugins cannot write to the clipboard. Copy puts the text in your prompt box for you to copy, and Copy report saves the report to `~/.claude/session-coach/export.md`.
-- If the prompt box does not answer within 3 seconds, Apply on a setup card offers Send to Claude and Copy.
+- Fix and Fix with Claude on a setup card do not use the prompt box, so they work the same in the desktop app.
 - `/plugin` does not run in the desktop app. Use + next to the prompt box, then Plugins.
 
 ## Files

@@ -166,7 +166,9 @@ export type SetupRecommendation = {
   stage?: Stage
 }
 
-export type ApplyState = 'filling' | 'filled' | 'refused' | 'sent' | 'copied' | 'copy-failed'
+export type ApplyState = 'applied' | 'already' | 'undone' | 'undo-blocked' | 'apply-failed' | 'sent' | 'filled' | 'copied' | 'copy-failed'
+
+export type AppliedPatch = { path: string; diff?: string; backup?: string; afterPrint?: string; isNew?: boolean; reason?: string }
 
 export type SetupAudit = {
   at: number
@@ -200,6 +202,7 @@ declare module 'claude-code' {
       setupNote: string
       setupSkipped: string[]
       setupApplyState: Record<string, ApplyState>
+      setupApplied: Record<string, AppliedPatch>
       planUsage: UsageWindow[]
       coachSpend: CoachSpend | null
       git: GitStatus | null

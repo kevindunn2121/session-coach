@@ -2,6 +2,12 @@
 
 All changes to session-coach, newest first. Pull request numbers up to #5 refer to the earlier repository `Nterlace-Solutions/session-coach`.
 
+## 0.8.0 (2026-11-03)
+
+- Setup audit cards fix in one click. **Fix** applies a recommendation's patch itself: it saves a backup to `~/.claude/session-coach/backups/`, writes the file, and shows the diff and when the change takes effect. **Undo** puts the file back, unless you edited the file after the fix. When the change is already there, Fix writes nothing.
+- **Fix with Claude** replaces Apply and Send to Claude. It sends the instruction as your next prompt in one click, without the prompt box, for hooks, allow rules and every change the plugin does not make itself. When Fix cannot write a file, the card says why and offers Fix with Claude.
+- Patches keep each file's line ending and final newline. Before, a file without a final newline gained one.
+
 ## 0.7.3 (2026-11-03)
 
 - The setup audit can return a `patch` for a recommendation the plugin can apply on its own, without Claude: lines to add to a CLAUDE.md, or `model`, a short list of `env` names, and `deny` or `ask` rules to merge into a `.claude/settings.json`. The parser drops any patch that touches hooks, allow rules or another key, so Claude still makes those changes behind its permission prompt. A new `hooks/apply.ts` plans each change, skips it when it is already there, keeps the file's indentation and line endings, and shows a line diff. The pane does not apply patches yet.

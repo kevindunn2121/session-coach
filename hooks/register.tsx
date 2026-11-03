@@ -1,7 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteRequest, ModelCompleteResult, PluginOptions, Register, RenderChildren, RenderSurface } from 'claude-code'
 
-import type { ApplyState, CoachJob, FeedStatus, Fix, Insight, Metrics, Playbook, PlaybookTrail, SetupAudit, SetupRecommendation, Tip, UsageWindow } from '../types'
+import type { AppliedPatch, ApplyState, CoachJob, FeedStatus, Fix, Insight, Metrics, Playbook, PlaybookTrail, SetupAudit, SetupRecommendation, Tip, UsageWindow } from '../types'
+import { backupPath, diffLines, planPatch, resolveTarget, restoreText } from './apply'
 import { comparePrompt, parseInsights, playbookText, reportMarkdown } from './coach'
 import type { HistoryEntry } from './coach'
 import { SEED_PLAYBOOK, buildTrail, collectPosts, mergePosts, parsePlaybook, pastedPosts, playbookPrompt, splitList } from './feed'
@@ -51,6 +52,7 @@ const auditingRef = atom({ plugin: 'session-coach', key: 'isAuditing' } as const
 const setupNoteRef = atom({ plugin: 'session-coach', key: 'setupNote' } as const, '')
 const setupSkippedRef = atom({ plugin: 'session-coach', key: 'setupSkipped' } as const, [])
 const setupApplyStateRef = atom({ plugin: 'session-coach', key: 'setupApplyState' } as const, {})
+const setupAppliedRef = atom({ plugin: 'session-coach', key: 'setupApplied' } as const, {})
 const planUsageRef = atom({ plugin: 'session-coach', key: 'planUsage' } as const, [])
 const spendRef = atom({ plugin: 'session-coach', key: 'coachSpend' } as const, null)
 const gitRef = atom({ plugin: 'session-coach', key: 'git' } as const, null)
@@ -489,6 +491,7 @@ const runAudit = async ($: EngineInterface, isForced: boolean): Promise<SetupAud
     if (stored?.fingerprint !== print) {
       await update($, setupSkippedRef, () => [])
       await update($, setupApplyStateRef, () => ({}))
+      await update($, setupAppliedRef, () => ({}))
       await $.store.set('setupSkipped', { fingerprint: print, ids: [] })
     }
     await noteSetup($, `${recommendations.length} recommendations. Instruction files add ~${measured.instructionTokens} tokens to every request.`, false)
@@ -547,10 +550,56 @@ const copyText = async ($: EngineInterface, text: string, surface: RenderSurface
 
 const recommendationCopyText = (rec: SetupRecommendation): string => (rec.manualFix ? fixCopyText(rec.manualFix) : rec.applyPrompt)
 
-const applyRecommendation = async ($: EngineInterface, rec: SetupRecommendation): Promise<void> => {
-  await setApplyState($, rec.id, 'filling')
-  const isFilled = await fillPrompt($, rec.applyPrompt)
-  await setApplyState($, rec.id, isFilled ? 'filled' : 'refused')
+const setApplied = ($: EngineInterface, id: string, applied: AppliedPatch | undefined) =>
+  update($, setupAppliedRef, all => {
+    const { [id]: _, ...rest } = all
+    return applied ? { ...rest, [id]: applied } : rest
+  })
+
+const failFix = async ($: EngineInterface, id: string, path: string, reason: string): Promise<void> => {
+  await setApplied($, id, { path, reason })
+  await setApplyState($, id, 'apply-failed')
+}
+
+// One click: back up the file, write the patch, and keep what Undo needs.
+const fixRecommendation = async ($: EngineInterface, rec: SetupRecommendation): Promise<void> => {
+  if (!rec.patch) return
+  const home = await homeDir($)
+  const path = resolveTarget(rec.patch.target, home, (await $.session.cwd()).replace(/[\\/]+$/, ''))
+  const current = await readText($, path)
+  const plan = planPatch(current, rec.patch)
+  if ('error' in plan) return failFix($, rec.id, path, plan.error)
+  if (!plan.isChanged) {
+    await setApplied($, rec.id, { path })
+    await setApplyState($, rec.id, 'already')
+    return
+  }
+  const backup = current === undefined ? undefined : backupPath(home, rec.id, rec.patch.target, await $.clock.now())
+  try {
+    if (backup !== undefined) await $.fs.write(backup, current ?? '')
+    await $.fs.write(path, plan.after)
+  } catch (error) {
+    return failFix($, rec.id, path, error instanceof Error ? error.message : String(error))
+  }
+  await setApplied($, rec.id, { path, diff: diffLines(plan.before, plan.after), ...(backup ? { backup } : {}), afterPrint: fingerprint(plan.after), isNew: current === undefined })
+  await setApplyState($, rec.id, 'applied')
+}
+
+const undoRecommendation = async ($: EngineInterface, rec: SetupRecommendation): Promise<void> => {
+  const applied = (await read($, setupAppliedRef))[rec.id]
+  if (!rec.patch || !applied) return
+  const current = await readText($, applied.path)
+  if (current === undefined || fingerprint(current) !== applied.afterPrint) {
+    await setApplyState($, rec.id, 'undo-blocked')
+    return
+  }
+  const before = applied.isNew ? undefined : applied.backup ? await readText($, applied.backup) : undefined
+  if (!applied.isNew && before === undefined) {
+    await setApplyState($, rec.id, 'undo-blocked')
+    return
+  }
+  await $.fs.write(applied.path, restoreText(rec.patch, before))
+  await setApplyState($, rec.id, 'undone')
 }
 
 const sendRecommendation = async ($: EngineInterface, rec: SetupRecommendation): Promise<void> => {
@@ -979,7 +1028,8 @@ export const register: Register = (on, options) => {
     const note = await read($, setupNoteRef)
     const skipped = await read($, setupSkippedRef)
     const applyStates = await read($, setupApplyStateRef)
-    const open = sortRecommendations(audit?.recommendations.filter(rec => !skipped.includes(rec.id)) ?? [])
+    const applied = await read($, setupAppliedRef)
+    const open =sortRecommendations(audit?.recommendations.filter(rec => !skipped.includes(rec.id)) ?? [])
     const counts = priorityCounts(open.map(rec => ({ priority: rec.priority ?? 3 })))
     const header = [
       `## 🛠 Setup audit${counts ? ` · ${counts}` : ''}`,
@@ -993,8 +1043,10 @@ export const register: Register = (on, options) => {
         <Markdown text={header} />
         {open.map(rec => {
           const state = applyStates[rec.id]
-          const canSend = state !== undefined && state !== 'sent'
-          const canCopy = state !== 'copied'
+          const isDone = state === 'sent' || state === 'applied' || state === 'already'
+          const canFix = rec.patch !== undefined && (state === undefined || state === 'undone')
+          const canSend = !isDone && (rec.patch === undefined || state === 'apply-failed')
+          const canCopy = !isDone && state !== 'copied'
           return (
             <Box key={`card-${rec.id}`} flexDirection="column" borderStyle="round" borderColor={PRIORITY_COLOR[rec.priority ?? 3]} paddingX={1}>
               <Box key={`chips-${rec.id}`} flexDirection="row" gap={1}>
@@ -1003,12 +1055,13 @@ export const register: Register = (on, options) => {
                 <Text color={STAGE_COLOR[rec.stage ?? 'setup']}>{`· ${STAGE_LABEL[rec.stage ?? 'setup']}`}</Text>
                 <Text dimColor>{`· ${rec.confidence} confidence`}</Text>
               </Box>
-              <Markdown key={`text-${rec.id}`} text={`${recommendationCard(rec, state)}\n\n${stageMarkdown(config.playbookUrl, rec.stage ?? 'setup')}`} />
+              <Markdown key={`text-${rec.id}`} text={`${recommendationCard(rec, state, applied[rec.id])}\n\n${stageMarkdown(config.playbookUrl, rec.stage ?? 'setup')}`} />
               <Box flexDirection="row" gap={1}>
-                {state === undefined && <Button key={`apply-${rec.id}`} variant="primary" label="Apply" onPress={() => applyRecommendation($, rec)} />}
-                {canSend && <Button key={`send-${rec.id}`} variant="primary" label="Send to Claude" onPress={() => sendRecommendation($, rec)} />}
+                {canFix && <Button key={`fix-${rec.id}`} variant="primary" label="Fix" onPress={() => fixRecommendation($, rec)} />}
+                {state === 'applied' && <Button key={`undo-${rec.id}`} label="Undo" onPress={() => undoRecommendation($, rec)} />}
+                {canSend && <Button key={`send-${rec.id}`} variant="primary" label="Fix with Claude" onPress={() => sendRecommendation($, rec)} />}
                 {canCopy && <Button key={`copy-${rec.id}`} label="Copy" onPress={press => copyRecommendation($, rec, press.surface)} />}
-                <Button key={`skip-${rec.id}`} label={state === 'sent' ? 'Done' : 'Skip'} onPress={() => skipRecommendation($, rec.id)} />
+                <Button key={`skip-${rec.id}`} label={isDone ? 'Done' : 'Skip'} onPress={() => skipRecommendation($, rec.id)} />
               </Box>
             </Box>
           )
