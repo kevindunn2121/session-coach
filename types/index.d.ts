@@ -54,6 +54,14 @@ export type FixWhen = 'btw' | 'steer' | 'next' | 'interrupt' | 'later'
 
 export type Fix = { kind: FixKind; text: string; target?: string; then?: string; when?: FixWhen }
 
+export type SettingsPatch = { model?: string; env?: Record<string, string>; deny?: string[]; ask?: string[] }
+
+export type Patch =
+  | { kind: 'claude-md-append'; target: string; heading: string; lines: string }
+  | { kind: 'settings-merge'; target: string; set: SettingsPatch }
+
+export type PatchPlan = { isChanged: boolean; before: string; after: string } | { error: string }
+
 export type Priority = 1 | 2 | 3 | 4
 
 export type Category = 'safety' | 'cost' | 'quality' | 'context' | 'workflow' | 'git' | 'setup'
@@ -152,6 +160,7 @@ export type SetupRecommendation = {
   ifSkipped: Outcome
   confidence: 'high' | 'medium' | 'low'
   manualFix?: Fix
+  patch?: Patch
   priority?: Priority
   category?: Category
   stage?: Stage
