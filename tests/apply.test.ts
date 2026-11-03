@@ -90,3 +90,23 @@ test('the audit asks for patches and keeps only the safe ones', async () => {
   }))
   expect(recs.map(rec => [rec.id, rec.patch?.kind])).toEqual([['deny-prod', 'settings-merge'], ['add-hook', undefined]])
 })
+
+test('every plan and diff keeps the line ending and final newline it found', async () => {
+  const md = parsePatch({ ...SAFETY, heading: '', lines: '- y' }) as Patch
+  const settings = parsePatch({ kind: 'settings-merge', target: '.claude/settings.json', set: { deny: ['Read(.env)'] } }) as Patch
+  const cases: [string, Patch, string | undefined, string][] = [
+    ['CLAUDE.md, LF', md, '# R\n- x\n', '# R\n- x\n\n- y\n'],
+    ['CLAUDE.md, CRLF', md, '# R\r\n- x\r\n', '# R\r\n- x\r\n\r\n- y\r\n'],
+    ['CLAUDE.md, no final newline', md, '# R\n- x', '# R\n- x\n\n- y'],
+    ['CLAUDE.md, new file', md, undefined, '- y\n'],
+    ['settings, LF', settings, '{\n  "model": "opus"\n}\n', '{\n  "model": "opus",\n  "permissions": {\n    "deny": [\n      "Read(.env)"\n    ]\n  }\n}\n'],
+    ['settings, CRLF', settings, '{\r\n  "model": "opus"\r\n}\r\n', '{\r\n  "model": "opus",\r\n  "permissions": {\r\n    "deny": [\r\n      "Read(.env)"\r\n    ]\r\n  }\r\n}\r\n'],
+    ['settings, no final newline', settings, '{"model": "opus"}', '{\n  "model": "opus",\n  "permissions": {\n    "deny": [\n      "Read(.env)"\n    ]\n  }\n}'],
+    ['settings, new file', settings, undefined, '{\n  "permissions": {\n    "deny": [\n      "Read(.env)"\n    ]\n  }\n}\n'],
+  ]
+  expect(cases.map(([name, patch, before]) => [name, planPatch(before, patch)])).toEqual(cases.map(([name, , before, after]) => [name, { isChanged: true, before: before ?? '', after }]))
+
+  expect(diffLines('a\r\nb\r\n', 'a\r\nb\r\nc\r\n')).toBe('  a\n  b\n+ c')
+  expect(diffLines('a', 'a\nb')).toBe('  a\n+ b')
+  expect(diffLines('a\nb', 'a\nb\n')).toBe('')
+})

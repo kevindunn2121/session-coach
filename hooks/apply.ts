@@ -100,13 +100,23 @@ export const resolveTarget = (target: string, home: string, cwd: string): string
 export const backupPath = (home: string, id: string, target: string, at: number): string =>
   `${slashes(home).replace(/\/+$/, '')}/.claude/session-coach/backups/${id}-${new Date(at).toISOString().replace(/[:.]/g, '-')}-${slashes(target).split('/').pop()}`
 
-const eolOf = (text: string): string => (text.includes('\r\n') ? '\r\n' : '\n')
+// Every plan and diff splits and joins through these two, so a file keeps its line ending
+// and its final newline. A new file gets a final newline.
+type Lines = { lines: string[]; eol: string; hasFinalNewline: boolean }
+
+const toLines = (text: string): Lines => ({
+  lines: text === '' ? [] : text.replace(/\r?\n$/, '').split(/\r?\n/),
+  eol: text.includes('\r\n') ? '\r\n' : '\n',
+  hasFinalNewline: text === '' || text.endsWith('\n'),
+})
+
+const fromLines = ({ lines, eol, hasFinalNewline }: Lines): string => `${lines.join(eol)}${hasFinalNewline && lines.length > 0 ? eol : ''}`
 
 const headingLevel = (line: string): number => line.match(/^(#{1,6}) /)?.[1]?.length ?? 0
 
 const planClaudeMd = (current: string, patch: Extract<Patch, { kind: 'claude-md-append' }>): PatchPlan => {
-  const eol = eolOf(current)
-  const lines = current === '' ? [] : current.split(/\r?\n/)
+  const text = toLines(current)
+  const { lines } = text
   const adding = patch.lines.split('\n')
   const present = new Set(lines.map(line => line.trim()))
   if (adding.every(line => line.trim() === '' || present.has(line.trim()))) return { isChanged: false, before: current, after: current }
@@ -120,13 +130,14 @@ const planClaudeMd = (current: string, patch: Extract<Patch, { kind: 'claude-md-
     while (insert - 1 > at && lines[insert - 1]!.trim() === '') insert--
     const gap = insert === at + 1 ? [''] : []
     const tail = insert === end && end < lines.length ? [''] : []
-    const after = [...lines.slice(0, insert), ...gap, ...adding, ...tail, ...lines.slice(insert)].join(eol)
-    return { isChanged: true, before: current, after }
+    return { isChanged: true, before: current, after: fromLines({ ...text, lines: [...lines.slice(0, insert), ...gap, ...adding, ...tail, ...lines.slice(insert)] }) }
   }
 
-  const base = current.replace(/\s+$/, '')
-  const block = [...(patch.heading ? [patch.heading, ''] : []), ...adding].join(eol)
-  return { isChanged: true, before: current, after: `${base}${base ? `${eol}${eol}` : ''}${block}${eol}` }
+  let last = lines.length
+  while (last > 0 && lines[last - 1]!.trim() === '') last--
+  const base = lines.slice(0, last)
+  const block = [...(base.length > 0 ? [''] : []), ...(patch.heading ? [patch.heading, ''] : []), ...adding]
+  return { isChanged: true, before: current, after: fromLines({ ...text, lines: [...base, ...block] }) }
 }
 
 const union = (list: unknown, add: string[] | undefined): string[] | undefined => {
@@ -159,7 +170,7 @@ const planSettings = (current: string, patch: Extract<Patch, { kind: 'settings-m
   if (JSON.stringify(settings) === JSON.stringify(parsed)) return { isChanged: false, before: current, after: current }
 
   const indent = current.match(/\n([ \t]+)"/)?.[1] ?? '  '
-  return { isChanged: true, before: current, after: `${JSON.stringify(settings, null, indent)}\n`.replace(/\n/g, eolOf(current)) }
+  return { isChanged: true, before: current, after: fromLines({ ...toLines(current), lines: JSON.stringify(settings, null, indent).split('\n') }) }
 }
 
 // `current` is the file's text, or undefined when it does not exist yet.
@@ -192,9 +203,8 @@ const lcs = (a: string[], b: string[]): string[] => {
 }
 
 export const diffLines = (before: string, after: string, context = 2): string => {
-  const split = (text: string): string[] => (text === '' ? [] : text.replace(/\r?\n$/, '').split(/\r?\n/))
-  const a = split(before)
-  const b = split(after)
+  const a = toLines(before).lines
+  const b = toLines(after).lines
   let head = 0
   while (head < a.length && head < b.length && a[head] === b[head]) head++
   let tail = 0
