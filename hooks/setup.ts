@@ -1,5 +1,6 @@
 import type { ApplyState, Drift, Metrics, SetupRecommendation } from '../types'
 
+import { PATCH_RULES, PATCH_SCHEMA, parsePatch } from './apply'
 import { extractJson } from './feed'
 import { FIX_TIMING_RULES, fixMarkdown, parseFix } from './fix'
 import { RANK_RULES, parseCategory, parsePriority, parseStage } from './rank'
@@ -190,10 +191,11 @@ export const auditPrompt = (snapshot: SetupSnapshot, measured: Measured, metrics
     'Base token estimates on the measured numbers; prefix estimates with ~ and say per turn or per session.',
     'applyPrompt is the exact instruction a developer would paste into Claude Code to make the change, naming files and settings, asking Claude to show the change before writing.',
     'manualFix is the same change done by hand: kind claude-md, settings, file, command or action, target the file path, text the exact lines to add or the command to run, then what to do next (for example start a new session).',
+    PATCH_RULES,
     FIX_TIMING_RULES,
     RANK_RULES,
     'Return JSON only:',
-    '{"recommendations":[{"id":"kebab-case","area":"claude-md|settings|hooks|skills|agents|mcp|models|permissions|workflow","title":"under 70 chars","problem":"one sentence","evidence":"what in the setup or session shows it","change":"the concrete change","applyPrompt":"instruction for Claude Code","ifApplied":{"drift":"less|same|more","tokens":"~+0/turn","summary":"one sentence"},"ifSkipped":{"drift":"less|same|more","tokens":"~+0/session","summary":"one sentence"},"confidence":"high|medium|low","priority":1,"category":"safety|cost|quality|context|workflow|git|setup","stage":"start|setup|plan|build|verify|ship|learn|context|safety","manualFix":{"kind":"claude-md|settings|file|command|action","target":"file path","text":"exact lines to add or command to run","when":"btw|steer|next|interrupt|later","then":"what to do next"}}]}',
+    `{"recommendations":[{"id":"kebab-case","area":"claude-md|settings|hooks|skills|agents|mcp|models|permissions|workflow","title":"under 70 chars","problem":"one sentence","evidence":"what in the setup or session shows it","change":"the concrete change","applyPrompt":"instruction for Claude Code","ifApplied":{"drift":"less|same|more","tokens":"~+0/turn","summary":"one sentence"},"ifSkipped":{"drift":"less|same|more","tokens":"~+0/session","summary":"one sentence"},"confidence":"high|medium|low","priority":1,"category":"safety|cost|quality|context|workflow|git|setup","stage":"start|setup|plan|build|verify|ship|learn|context|safety","manualFix":{"kind":"claude-md|settings|file|command|action","target":"file path","text":"exact lines to add or command to run","when":"btw|steer|next|interrupt|later","then":"what to do next"},${PATCH_SCHEMA}}]}`,
   ].join('\n')
 
 const DRIFT_LABEL: Record<Drift, string> = { less: '↓ less', same: '→ same', more: '↑ more' }
@@ -249,6 +251,7 @@ export const parseRecommendations = (text: string): SetupRecommendation[] => {
       const area = asString(item?.area)
       const confidence = asString(item?.confidence)
       const manualFix = parseFix(item?.manualFix)
+      const patch = parsePatch(item?.patch)
       return {
         id: asString(item?.id).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, ''),
         area: (AREAS as readonly string[]).includes(area) ? area : 'workflow',
@@ -261,6 +264,7 @@ export const parseRecommendations = (text: string): SetupRecommendation[] => {
         ifSkipped: asOutcome(item?.ifSkipped),
         confidence: confidence === 'high' || confidence === 'low' ? confidence : 'medium',
         ...(manualFix ? { manualFix } : {}),
+        ...(patch ? { patch } : {}),
         priority: parsePriority(item?.priority),
         category: parseCategory(item?.category, 'setup'),
         stage: parseStage(item?.stage, parseCategory(item?.category, 'setup')),
