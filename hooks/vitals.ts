@@ -1,7 +1,7 @@
 import type { CoachJob, CoachSpend, GitStatus, JobSpend, Metrics, Tip, UsageWindow } from '../types'
 
 import { cacheHitRate, contextRunway, finishTip, mostEditedFile } from './metrics'
-import type { TipDraft, TipRank } from './metrics'
+import type { RuleEntry, TipDraft, TipRank } from './metrics'
 
 const HOUR_MS = 60 * 60 * 1000
 const PLAN_WARN = 80
@@ -162,7 +162,27 @@ export const vitalTips = (usage: UsageWindow[], git: GitStatus | null, now: numb
     }
   }
 
-  const rank = (id: string): TipRank =>
-    id.startsWith('plan-critical') ? [1, 'cost', 'context'] : id.startsWith('plan-') ? [2, 'cost', 'context'] : id === 'git-age' ? [3, 'git', 'ship'] : [2, 'git', 'ship']
-  return found.map(tip => finishTip(tip, tip.id.startsWith('plan-') ? 'steer' : 'next', rank(tip.id)))
+  return found.map(tip => {
+    const rule = VITAL_RULES[vitalRuleId(tip.id)]
+    return finishTip(tip, rule.when, rule.rank)
+  })
 }
+
+type VitalRuleId = 'plan-critical' | 'plan-warn' | 'git-main' | 'git-size' | 'git-age'
+
+// Plan tips carry the window in their id, such as plan-critical-five_hour.
+const vitalRuleId = (id: string): VitalRuleId =>
+  id.startsWith('plan-critical') ? 'plan-critical' : id.startsWith('plan-') ? 'plan-warn' : id === 'git-main' || id === 'git-size' ? id : 'git-age'
+
+const VITAL_RULES: Record<VitalRuleId, { trigger: string; rank: TipRank; when: 'steer' | 'next' }> = {
+  'plan-critical': { trigger: `A plan usage window at ${PLAN_CRITICAL}% or more.`, rank: [1, 'cost', 'context'], when: 'steer' },
+  'plan-warn': { trigger: `A plan usage window at ${PLAN_WARN}% or more.`, rank: [2, 'cost', 'context'], when: 'steer' },
+  'git-main': { trigger: 'Uncommitted changes on main or master.', rank: [2, 'git', 'ship'], when: 'next' },
+  'git-size': { trigger: `${GIT_FILES} or more changed files, or ${GIT_LINES} or more lines, uncommitted.`, rank: [2, 'git', 'ship'], when: 'next' },
+  'git-age': { trigger: `More than ${GIT_AGE_MS / HOUR_MS} hours since the last commit with work pending.`, rank: [3, 'git', 'ship'], when: 'next' },
+}
+
+export const VITAL_CATALOG: readonly RuleEntry[] = (Object.keys(VITAL_RULES) as VitalRuleId[]).map(id => {
+  const { trigger, rank: [priority, category, stage], when } = VITAL_RULES[id]
+  return { id, trigger, when, priority, category, stage }
+})

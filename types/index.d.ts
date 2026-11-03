@@ -76,9 +76,9 @@ export type Insight = {
   stage?: Stage
 }
 
-export type Practice = { practice: string; why: string; signal: string; stage?: Stage }
+export type Practice = { practice: string; why: string; signal: string; stage?: Stage; evidence?: number[] }
 
-export type ToolIdea = { kind: InsightKind; name: string; what: string; stage?: Stage }
+export type ToolIdea = { kind: InsightKind; name: string; what: string; stage?: Stage; evidence?: number[] }
 
 export type Playbook = {
   fetchedAt: number
@@ -86,6 +86,25 @@ export type Playbook = {
   postCount: number
   practices: Practice[]
   tools: ToolIdea[]
+}
+
+/** One feed source in a playbook build: posts fetched, kept after duplicates were removed, and sent to the model. */
+export type TrailSource = { source: string; fetched: number; kept: number; sent: number }
+
+/** A post the playbook model saw, numbered as in its prompt so practices can cite it. */
+export type TrailPost = { n: number; source: string; title: string; url?: string; score: number; publishedAt?: number; weight: number; rank: number }
+
+/** How one playbook was built, for the transparency page. */
+export type PlaybookTrail = {
+  builtAt: number
+  model: string
+  sources: TrailSource[]
+  skippedHandles: string[]
+  fetched: number
+  kept: number
+  posts: TrailPost[]
+  promptChars: number
+  promptLimit: number
 }
 
 export type UsageWindow = { kind: string; percent: number; resetsAt?: string }
@@ -178,6 +197,7 @@ declare module 'claude-code' {
       lastAction: ActionStatus | null
       isWorking: boolean
       mapPath: string
+      transparencyPath: string
     }
   }
 }

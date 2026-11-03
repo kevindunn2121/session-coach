@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -45,6 +45,8 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+body { margin: 0; }
+body > .site-nav:first-child { margin: -28px calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 28px calc(-1 * max(16px, env(safe-area-inset-left, 0px))); }
 body {
   background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -143,19 +145,52 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
 }
 .empty { color: var(--muted); font-style: italic; }
 .rail .signal { color: var(--muted); }
+
+.site-nav { --nav-bg: #151f29; --nav-ink: #e5ecf2; --nav-muted: #9aa9b7; --nav-rule: #2a3946; --nav-accent: #a98ae6;
+  position: sticky; top: 0; z-index: 50; background: var(--nav-bg); color: var(--nav-ink); border-bottom: 1px solid var(--nav-rule);
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace; font-size: 0.82rem; }
+:root[data-theme="light"] .site-nav { --nav-bg: #ffffff; --nav-ink: #15212c; --nav-muted: #566573; --nav-rule: #cfd6dd; --nav-accent: #6d4fa3; }
+.site-nav-in { max-width: var(--site-nav-max, 1080px); margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.site-nav-brand { font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nav-muted); margin-right: auto; }
+.site-nav-links { display: flex; flex-wrap: wrap; gap: 4px; }
+.site-nav a, .site-nav button { color: var(--nav-ink); text-decoration: none; min-height: 36px; padding: 6px 12px; border-radius: 999px;
+  display: inline-flex; align-items: center; border: 1px solid transparent; background: none; font: inherit; cursor: pointer; }
+.site-nav a:hover, .site-nav button:hover { border-color: var(--nav-rule); }
+.site-nav a[aria-current="page"] { border-color: var(--nav-accent); color: var(--nav-accent); font-weight: 600; }
+.site-nav button { border-color: var(--nav-rule); color: var(--nav-muted); }
+.site-nav a:focus-visible, .site-nav button:focus-visible { outline: 3px solid var(--nav-accent); outline-offset: 2px; }
+@media (max-width: 600px) { .site-nav-brand { flex-basis: 100%; } .site-nav a, .site-nav button { padding: 6px 9px; } }
 </style>
 </head>
 <body>
+<nav class="site-nav" aria-label="session-coach pages"><div class="site-nav-in"><span class="site-nav-brand">session-coach</span><div class="site-nav-links"><a href="session-coach-guide.html">Guide</a><a href="playbook-line-map.html" aria-current="page">Line map</a><a href="playbook-transparency.html">How it was built</a></div><button type="button" class="site-nav-theme" id="navTheme" aria-label="Switch color theme">Light</button></div></nav>
+<script>
+(function () {
+  var root = document.documentElement, key = 'session-coach-theme', button = document.getElementById('navTheme');
+  try { var saved = localStorage.getItem(key); if (saved === 'light' || saved === 'dark') root.dataset.theme = saved; } catch (e) {}
+  var label = function () { if (button) button.textContent = root.dataset.theme === 'light' ? 'Dark' : 'Light'; };
+  new MutationObserver(function () {
+    label();
+    try { localStorage.setItem(key, root.dataset.theme); } catch (e) {}
+  }).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+  if (button) button.addEventListener('click', function () {
+    var own = document.getElementById('tg');
+    if (own) own.click();
+    else root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
+  });
+  label();
+})();
+</script>
 <div class="wrap">
   <header>
     <span class="eyebrow">Session coach · expert playbook · line map</span>
     <h1>Agent Playbook Line Map</h1>
     <p class="lede">How a project should run with AI coding agents, from the first prompt to shipping and learning. Every coach recommendation links to the station it belongs to.</p>
     <div class="meta">
-      <span>Built from <b>43</b> posts</span>
-      <span><b>18</b> sources (Reddit, X, expert blogs)</span>
-      <span><b>12</b> practices · <b>8</b> tools</span>
-      <span>Playbook <b>2026-10-29</b></span>
+      <span>Built from <b>94</b> posts</span>
+      <span><b>8</b> sources (Reddit, X, expert blogs)</span>
+      <span><b>12</b> practices · <b>6</b> tools</span>
+      <span>Playbook <b>2026-11-02</b></span>
     </div>
   </header>
 
@@ -230,7 +265,7 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
           </details>
         </div>
       </div>
-      <div class="cols"><article class="card"><h4>Define the machine-checkable success check before the task and let the agent loop against it</h4><p class="why">Tasks with cheap objective checks (tests, compilers, conformance suites) let the agent iterate autonomously.</p><p class="see"><b>You will see</b><br>The prompt names a test command or suite, and the agent reruns it until it passes without being nudged.</p></article></div>
+      <div class="cols"><article class="card"><h4>Give the agent a detailed prompt that states the goal, source material to read first, and constraints</h4><p class="why">Specific framing with pointers to relevant sources produces better first results on exploratory tasks.</p><p class="see"><b>You will see</b><br>First prompts name articles or code to read, the target outcome and what is out of bounds.</p></article></div>
       <div class="strip"><div class="box"><h5>Coach watches for</h5><ul><li>Short prompts with no file or goal (P3 Context)</li><li>Big changes with no plan step (P2 Workflow)</li></ul></div></div>
     </div>
   </section>
@@ -243,7 +278,7 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
         <h2>Rules, agents and hooks</h2>
         <p class="lede">Make the good path the default before the first feature: short rules the agent always loads, agents for each kind of work, and hooks that enforce what rules only ask for.</p>
       </header>
-      <div class="cols"><article class="card"><h4>Put workflow-ordering rules in CLAUDE.md, such as &#39;list and read all needed files first, edit, then run tests once&#39;</h4><p class="why">Behavior-changing rules cut the read-edit loop that burns usage, and they beat style rules.</p><p class="see"><b>You will see</b><br>The agent batches its file reads, makes its edits, then runs the tests a single time.</p></article></div>
+      <div class="cols"><article class="card"><h4>Set constraints around agents (lints, tests, rules) rather than relying on prompt wording for code quality</h4><p class="why">Quality depends on the guardrails the agent works inside.</p><p class="see"><b>You will see</b><br>Linters, type checks and test gates run automatically on agent output.</p></article></div>
       <div class="strip"><div class="box"><h5>Coach watches for</h5><ul><li>Setup audit cards: rules the session ignores, stale or bloated CLAUDE.md, missing hooks</li></ul></div></div>
     </div>
   </section>
@@ -256,8 +291,8 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
         <h2>Spec first, code second</h2>
         <p class="lede">Specification quality, not prompt tricks, separates strong agent users from weak ones. Plan in a separate step and re-plan when work goes sideways.</p>
       </header>
-      <div class="cols"><article class="card"><h4>Write &#39;done means&#39; criteria, a not-doing list, decisions and thin slices before any big change</h4><p class="why">Agents fill every open question with a guess, so unstated scope turns into wrong work.</p><p class="see"><b>You will see</b><br>The first prompt or spec file has numbered checkable outcomes, an out-of-scope list, and slices that each start with a failing test.</p></article><article class="card"><h4>Run research, plan and implement as separate phases, with implementation in a fresh session that gets only the plan</h4><p class="why">Lean context avoids degradation past roughly 50-70% full, and a read-only research pass maps files and edge cases first.</p><p class="see"><b>You will see</b><br>A research doc and a plan file exist, and the implementation session starts from the plan alone.</p></article></div>
-      <div class="strip"><div class="box"><h5>Add to your setup</h5><ul><li><span class="kind">skill</span><code>spec-interview</code> The AI interviews the team on requirements and writes a spec before coding starts.</li></ul></div><div class="box"><h5>Coach watches for</h5><ul><li>Big change with no plan step (P2 Workflow)</li><li>Two or more correction prompts (P1 Workflow)</li></ul></div></div>
+      <div class="cols"><article class="card"><h4>Keep human judgment on the outer loop and don&#39;t delegate decisions about goals and acceptance</h4><p class="why">Agents can finish tasks without owner judgment, and the human must set the boundary.</p><p class="see"><b>You will see</b><br>You define goals and approve results, while the agent iterates inside the loop.</p></article></div>
+      <div class="strip"><div class="box"><h5>Coach watches for</h5><ul><li>Big change with no plan step (P2 Workflow)</li><li>Two or more correction prompts (P1 Workflow)</li></ul></div></div>
     </div>
   </section>
 
@@ -269,8 +304,8 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
         <h2>Delegate and run in parallel</h2>
         <p class="lede">Routine code goes to cheaper models, judgment stays on the top model, and parallel sessions each get their own worktree so nobody overwrites anybody.</p>
       </header>
-      <div class="cols"><article class="card"><h4>Run parallel sessions in separate git worktrees on non-overlapping tasks, and check for cross-session overwrites</h4><p class="why">Stale reads let one session silently erase another&#39;s fix while the tests still pass.</p><p class="see"><b>You will see</b><br>Each session has its own branch and worktree, and a git log check finds no files touched by two authors within an hour.</p></article></div>
-      <div class="strip"><div class="box"><h5>Add to your setup</h5><ul><li><span class="kind">hook</span><code>agent-status-notifier</code> A notification hook that fires a light, sound or toast when the agent is idle or waiting for input.</li><li><span class="kind">habit</span><code>worktree-per-task</code> Start each parallel task with claude --worktree so it gets its own branch and directory.</li></ul></div><div class="box"><h5>Coach watches for</h5><ul><li>Edits to files Claude never read (P2 Quality)</li><li>One file edited 5+ times (P1 Quality)</li><li>Long session with no subagents (P3 Tokens &amp; cost)</li></ul></div></div>
+      <p class="empty">No practice in today's playbook landed on this station.</p>
+      <div class="strip"><div class="box"><h5>Add to your setup</h5><ul><li><span class="kind">habit</span><code>delete-stale-uv-lock</code> When getting confusing dependency errors in a library project, delete the gitignored uv.lock and re-run.</li></ul></div><div class="box"><h5>Coach watches for</h5><ul><li>Edits to files Claude never read (P2 Quality)</li><li>One file edited 5+ times (P1 Quality)</li><li>Long session with no subagents (P3 Tokens &amp; cost)</li></ul></div></div>
     </div>
   </section>
 
@@ -282,8 +317,8 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
         <h2>Close the loop</h2>
         <p class="lede">An agent that can check its own work and iterates until the check passes produces 2 to 3 times better results. Make it prove things, and review it like a skeptic.</p>
       </header>
-      <div class="cols"><article class="card"><h4>Have a second agent review the plan, and use separate agents to write and review code; never let the author approve its own work</h4><p class="why">Independent passes catch errors that self-review misses.</p><p class="see"><b>You will see</b><br>A reviewer session with a different prompt critiques the plan or diff before merge.</p></article><article class="card"><h4>Review LLM code against a checklist: list edge cases first, paste real docs, write tests from the spec alone, grep for swallowed errors</h4><p class="why">These are the recurring failure patterns of LLM-written code.</p><p class="see"><b>You will see</b><br>Reviews cover edge-case lists, independently written tests, and a grep for broad try/except and empty catch blocks.</p></article><article class="card"><h4>Test deployment seams, not just logic: production sign-in, real database, real email, scheduled jobs, concurrent writers</h4><p class="why">AI-built tools that passed every acceptance check shared these same gaps.</p><p class="see"><b>You will see</b><br>The verification list includes production-like auth, a real DB, sent email and concurrent-write tests.</p></article></div>
-      <div class="strip"><div class="box"><h5>Add to your setup</h5><ul><li><span class="kind">skill</span><code>evals-runner</code> A skill holding rubrics and error-analysis steps so the agent builds and runs evals after changing prompts or tools.</li></ul></div><div class="box"><h5>Coach watches for</h5><ul><li>5+ edits since the last test, lint or type check (P2 Quality)</li><li>The same command failing twice (P1 Quality)</li></ul></div></div>
+      <div class="cols"><article class="card"><h4>Plan the work, have a second agent review it, then review and test it yourself before shipping</h4><p class="why">A plan, an independent agent review and a human check keep AI-built code from being unreviewed &#39;vibe coding&#39;.</p><p class="see"><b>You will see</b><br>Each change shows a written plan, a separate reviewer-agent pass and your own test run before the commit or PR.</p></article><article class="card"><h4>Build evals from real conversation traces and check the graders themselves</h4><p class="why">Automated graders can disagree with human judgment, so they must be validated against annotated traces.</p><p class="see"><b>You will see</b><br>An eval set derived from real traces exists, and its grader has been compared with human labels.</p></article><article class="card"><h4>Treat verification as the bottleneck and write checks that prove correctness, not just that code was produced</h4><p class="why">Writing code is now cheap, while knowing it is correct is the scarce part.</p><p class="see"><b>You will see</b><br>Tasks include a done-when check, such as tests or a repro, that runs before the work is accepted.</p></article></div>
+      <div class="strip"><div class="box"><h5>Add to your setup</h5><ul><li><span class="kind">command</span><code>build-eval-hill-climb</code> The claude-api plugin&#39;s build_eval and hill-climb commands build evals, check the graders and iterate the app against them.</li><li><span class="kind">agent</span><code>second-agent-reviewer</code> A separate reviewer agent critiques plans and diffs before the human review.</li></ul></div><div class="box"><h5>Coach watches for</h5><ul><li>5+ edits since the last test, lint or type check (P2 Quality)</li><li>The same command failing twice (P1 Quality)</li></ul></div></div>
     </div>
   </section>
 
@@ -295,8 +330,8 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
         <h2>Branch, PR, merge</h2>
         <p class="lede">Small, visible steps reach main through pull requests. Checks run before every merge, and a bad turn is always one revert away.</p>
       </header>
-      <div class="cols"><article class="card"><h4>Review and rewrite agent-generated commit messages before pushing to shared or public repos</h4><p class="why">Commit messages are public and can carry agent cruft or private IDs.</p><p class="see"><b>You will see</b><br>Commits are edited with a safety branch before publishing.</p></article></div>
-      <div class="strip"><div class="box"><h5>Add to your setup</h5><ul><li><span class="kind">command</span><code>commit-rewriter</code> Creates a safety branch and lets you edit every commit message with the diffs visible before publishing.</li></ul></div><div class="box"><h5>Coach watches for</h5><ul><li>Uncommitted changes on main (P2 Git)</li><li>10+ files or 300+ lines uncommitted (P2 Git)</li><li>2+ hours since the last commit with work pending (P3 Git)</li></ul></div></div>
+      <p class="empty">No practice in today's playbook landed on this station.</p>
+      <div class="strip"><div class="box"><h5>Coach watches for</h5><ul><li>Uncommitted changes on main (P2 Git)</li><li>10+ files or 300+ lines uncommitted (P2 Git)</li><li>2+ hours since the last commit with work pending (P3 Git)</li></ul></div></div>
     </div>
   </section>
 
@@ -308,8 +343,8 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
         <h2>Turn mistakes into rules</h2>
         <p class="lede">Every repeated correction is a missing rule, skill or eval. Learn feeds straight back into the next Plan.</p>
       </header>
-      <div class="cols"><article class="card"><h4>When the agent errs twice, have it write the fix into CLAUDE.md or a skill, and prune stale or conflicting entries regularly</h4><p class="why">Recorded lessons stop repeated mistakes, and unpruned instructions anchor the agent on stale patterns.</p><p class="see"><b>You will see</b><br>CLAUDE.md gains dated lessons after corrections and is periodically deduplicated.</p></article></div>
-      <div class="strip"><div class="box"><h5>Add to your setup</h5><ul><li><span class="kind">skill</span><code>skill-curator</code> A meta-skill that checks whether a new skill should update an existing one and flags conflicts.</li><li><span class="kind">habit</span><code>ask-why-introspection</code> Ask the agent why it made a surprising decision to find confusing harness instructions.</li></ul></div><div class="box"><h5>Coach watches for</h5><ul><li>Session report and score trend against your average</li><li>Setup audit: rules worth adding or pruning</li></ul></div></div>
+      <div class="cols"><article class="card"><h4>Audit agent instruction files periodically and remove what the agent no longer needs</h4><p class="why">Stale or bloated rules waste context and can mislead the agent.</p><p class="see"><b>You will see</b><br>Agent files are pruned on a schedule and shrink or stay concise.</p></article></div>
+      <div class="strip"><div class="box"><h5>Add to your setup</h5><ul><li><span class="kind">habit</span><code>agent-file-audit</code> Review the agent instruction files regularly and cut out anything the agent no longer needs.</li></ul></div><div class="box"><h5>Coach watches for</h5><ul><li>Session report and score trend against your average</li><li>Setup audit: rules worth adding or pruning</li></ul></div></div>
     </div>
   </section>
 
@@ -317,13 +352,13 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
     <section class="rail context" id="context" style="--c: var(--context)">
       <span class="eyebrow">Runs the whole trip</span>
       <h2>Context &amp; cost line</h2>
-      <ul><li><b>Use subagents for exploration that would flood context, slash commands for repeated procedures, and load memory on demand.</b> This keeps the main window clean, and blanket session-start memory makes the agent anchor on stale information. <span class="signal">You will see: Research runs in isolated subagents, and context is pulled in lazily rather than dumped at start.</span></li><li><span class="kind">habit</span><code>project-index-file</code> Keep an annotated INDEX.md with a suggested reading order, referenced from CLAUDE.md, so new sessions onboard quickly.</li></ul>
+      <ul><li><b>Start a fresh session once context reaches roughly 300-400K tokens.</b> Long contexts burn quota faster and degrade output quality. <span class="signal">You will see: Sessions are restarted with a short handoff summary instead of running indefinitely.</span></li><li><b>Turn off or limit subagents when token usage spikes.</b> Subagent fan-out can multiply token consumption per task and drain weekly limits. <span class="signal">You will see: Subagent use is disabled or restricted in settings and token use per task drops.</span></li><li><b>Measure token consumption with a usage tool such as ccusage before blaming the model.</b> Measured numbers show whether usage or quality has really changed instead of guessing. <span class="signal">You will see: You compare ccusage output across days before changing your workflow.</span></li><li><span class="kind">command</span><code>ccusage</code> A CLI that reports Claude Code token consumption so usage anomalies can be investigated.</li><li><span class="kind">habit</span><code>fresh-session-at-context-threshold</code> Restart with a handoff summary after about 300-400K tokens of context.</li></ul>
       <div class="chips"><span class="chip" style="--c: var(--context)">P1 runway</span><span class="chip" style="--c: var(--context)">P2 context 75%</span><span class="chip" style="--c: var(--context)">P2 cache hit</span><span class="chip" style="--c: var(--context)">P1/P2 plan window</span></div>
     </section>
     <section class="rail safety" id="safety" style="--c: var(--safety)">
       <span class="eyebrow">Runs the whole trip</span>
       <h2>Safety line</h2>
-      <ul><li><b>Run the agent in a sandbox with test credentials only, an egress allowlist, and hard budget caps.</b> Auto-approve mode is productive but risks exfiltration and runaway spend. <span class="signal">You will see: The agent runs in a container with staging keys scoped to a budget-limited account.</span></li></ul>
+      <ul><li><b>Choose an autonomy level per task and match review depth to the risk.</b> Not all work warrants the same level of oversight. <span class="signal">You will see: Risky changes get step-by-step approval, while low-risk tasks run with looser permissions.</span></li><li><b>Run untrusted generated HTML or code in a tight sandbox.</b> Sandbox escapes in rendered artifacts can expose private data and APIs. <span class="signal">You will see: Generated apps run in isolated sandboxes with no access to credentials or APIs.</span></li></ul>
       <div class="chips"><span class="chip" style="--c: var(--safety)">PreToolUse guard hook</span><span class="chip" style="--c: var(--safety)">P4 permission asks</span></div>
     </section>
   </div>
@@ -337,8 +372,10 @@ footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
   </section>
 
   <footer>
-    <span>Sources: r/ClaudeAI, r/ClaudeCode, r/ChatGPTCoding, r/AI_Agents, @bcherny, @_catwu, @lennysan, @alexalbert__, @karpathy, @swyx, simonwillison.net, simonw.substack.com, hamel.dev, eugeneyan.com, www.latent.space, karpathy.bearblog.dev, jxnl.co, addyo.substack.com.</span>
-    <span>Practices are summarized from the session coach playbook built on 2026-10-29. The coach rebuilds the playbook daily and writes this page again each time.</span>
+    <span>Sources: r/ClaudeAI, simonwillison.net, hamel.dev, eugeneyan.com, www.latent.space, karpathy.bearblog.dev, jxnl.co, addyo.substack.com.</span>
+    <span>Practices are summarized from the session coach playbook built on 2026-11-02. The coach rebuilds the playbook daily and writes this page again each time.</span>
+    <span><a href="playbook-transparency.html">How this playbook was built</a>: the sources, ranking and posts behind each practice.</span>
+    <span><a href="session-coach-guide.html">How to use session-coach</a>: install, the pane, fixes and commands.</span>
   </footer>
 </div>
 <script>

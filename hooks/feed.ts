@@ -1,7 +1,7 @@
-import type { Category, InsightKind, Playbook, Practice, Stage, ToolIdea } from '../types'
+import type { Category, InsightKind, Playbook, PlaybookTrail, Practice, Stage, ToolIdea } from '../types'
 import { parseCategory, parseStage } from './rank'
 
-export type Post = { source: string; title: string; body: string; score: number; publishedAt?: number }
+export type Post = { source: string; title: string; body: string; score: number; publishedAt?: number; url?: string }
 
 export type FetchText = (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number; text: string }>
 
@@ -16,7 +16,8 @@ export type FeedConfig = {
 const USER_AGENT = 'session-coach/0.1 (Claude Code plugin)'
 const POSTS_PER_SOURCE = 12
 const BODY_CHARS = 600
-const PROMPT_CHARS = 24000
+export const PROMPT_CHARS = 24000
+const EVIDENCE_CAP = 5
 const DAY_MS = 24 * 60 * 60 * 1000
 const FRESH_DAYS = 7
 const UNDATED_WEIGHT = 0.5
@@ -79,31 +80,39 @@ const tagRaw = (block: string, tags: string[]): string => {
 
 const tagText = (block: string, tags: string[]): string => stripHtml(tagRaw(block, tags))
 
+const asUrl = (value: string): string | undefined => (/^https?:\/\/\S+$/i.test(value) ? value : undefined)
+
+// RSS puts the post link in <link>url</link>; Atom puts it in <link href="url"/>.
+const linkOf = (block: string): string | undefined =>
+  asUrl(tagText(block, ['link'])) ?? asUrl(block.match(/<link\b[^>]*\bhref="([^"]+)"/i)?.[1]?.replace(/&amp;/g, '&') ?? '')
+
+const withUrl = (post: Post, url: string | undefined): Post => (url === undefined ? post : { ...post, url })
+
 export const parseFeed = (xml: string, source: string): Post[] => {
   const blocks = xml.match(/<(item|entry)[\s>][\s\S]*?<\/\1>/gi) ?? []
 
-  return blocks.slice(0, POSTS_PER_SOURCE).map(block => ({
+  return blocks.slice(0, POSTS_PER_SOURCE).map(block => withUrl({
     source,
     title: tagText(block, ['title']),
     body: tagText(block, ['description', 'content', 'summary']).slice(0, BODY_CHARS),
     score: 0,
     publishedAt: asTime(tagRaw(block, ['pubDate', 'published', 'updated', 'dc:date'])),
-  })).filter(post => post.title.length > 0 || post.body.length > 0)
+  }, linkOf(block))).filter(post => post.title.length > 0 || post.body.length > 0)
 }
 
-type RedditListing = { data?: { children?: { data?: { title?: unknown; selftext?: unknown; score?: unknown; created_utc?: unknown } }[] } }
+type RedditListing = { data?: { children?: { data?: { title?: unknown; selftext?: unknown; score?: unknown; created_utc?: unknown; permalink?: unknown } }[] } }
 
 export const parseRedditJson = (text: string, source: string): Post[] => {
   const listing = JSON.parse(text) as RedditListing
   const children = listing.data?.children ?? []
 
-  return children.slice(0, POSTS_PER_SOURCE).map(child => ({
+  return children.slice(0, POSTS_PER_SOURCE).map(child => withUrl({
     source,
     title: typeof child.data?.title === 'string' ? child.data.title : '',
     body: typeof child.data?.selftext === 'string' ? child.data.selftext.slice(0, BODY_CHARS) : '',
     score: typeof child.data?.score === 'number' ? child.data.score : 0,
     publishedAt: asTime(child.data?.created_utc),
-  })).filter(post => post.title.length > 0)
+  }, typeof child.data?.permalink === 'string' ? asUrl(`https://www.reddit.com${child.data.permalink}`) : undefined)).filter(post => post.title.length > 0)
 }
 
 const tryFetch = async (fetchText: FetchText, url: string): Promise<string | undefined> => {
@@ -193,17 +202,27 @@ const ageLabel = (publishedAt: number | undefined, now: number): string => {
   return `, ${Math.max(0, Math.floor((now - publishedAt) / DAY_MS))}d old`
 }
 
-export const playbookPrompt = (posts: Post[], now: number): string => {
-  const lines: string[] = []
-  let used = 0
-  const ranked = [...posts].sort((a, b) => postRank(b, now) - postRank(a, now))
+export type SelectedPost = { n: number; post: Post; weight: number; rank: number; line: string }
 
-  for (const post of ranked) {
-    const line = `[${post.source}${ageLabel(post.publishedAt, now)}] ${post.title}${post.body ? ` :: ${post.body}` : ''}`
+/** The posts that fit in the playbook prompt, best rank first, numbered #1, #2… so the model can cite them. */
+export const selectPosts = (posts: Post[], now: number): { sent: SelectedPost[]; chars: number } => {
+  const sent: SelectedPost[] = []
+  let used = 0
+  const ranked = posts.map(post => ({ post, weight: recencyWeight(post.publishedAt, now), rank: postRank(post, now) })).sort((a, b) => b.rank - a.rank)
+
+  for (const item of ranked) {
+    const n = sent.length + 1
+    const line = `#${n} [${item.post.source}${ageLabel(item.post.publishedAt, now)}] ${item.post.title}${item.post.body ? ` :: ${item.post.body}` : ''}`
     if (used + line.length > PROMPT_CHARS) break
-    lines.push(line)
+    sent.push({ ...item, n, line })
     used += line.length
   }
+
+  return { sent, chars: used }
+}
+
+export const playbookPrompt = (posts: Post[], now: number): string => {
+  const lines = selectPosts(posts, now).sent.map(item => item.line)
 
   return [
     'Below are recent posts by AI engineers about working with AI coding agents such as Claude Code, most relevant and recent first.',
@@ -213,6 +232,7 @@ export const playbookPrompt = (posts: Post[], now: number): string => {
     `"tools":[{"kind":"habit|skill|agent|hook|command","name":"kebab-case","what":"one sentence",${STAGE_FIELDS}}]}`,
     'Give at most 12 practices and 8 tools. Skip hype, news and model gossip.',
     STAGE_RULES,
+    `Set evidence to the # numbers of the posts that back each item, at most ${EVIDENCE_CAP}. Use [] when no post backs it.`,
     '',
     '<posts>',
     ...lines,
@@ -235,23 +255,40 @@ const asString = (value: unknown): string => (typeof value === 'string' ? value.
 
 const asKind = (value: unknown): InsightKind => (KINDS.includes(value as InsightKind) ? (value as InsightKind) : 'habit')
 
-const STAGE_FIELDS = '"category":"safety|cost|quality|context|workflow|git|setup","stage":"start|setup|plan|build|verify|ship|learn|context|safety"'
+const STAGE_FIELDS = '"evidence":[1,4],"category":"safety|cost|quality|context|workflow|git|setup","stage":"start|setup|plan|build|verify|ship|learn|context|safety"'
 
 const STAGE_RULES =
   'Set stage to the playbook station each item belongs to: start (how a project or task is framed in its first prompt), setup (rules, agents, hooks, skills), plan (spec, done-when, plan mode), build (delegation, parallel sessions, editing), verify (tests, review, evals), ship (branches, commits, PRs), learn (turning mistakes into rules, skills and evals), context (context window, cost and plan usage) or safety (destructive actions, secrets, permissions). Set category to the one that fits best; it is the fallback when the stage is unclear.'
 
 const asStage = (item: Record<string, unknown>, fallback: Category): Stage => parseStage(item?.stage, parseCategory(item?.category, fallback))
 
+// Post numbers the model cited, kept only when they name a post it was sent.
+const asEvidence = (value: unknown, sent: number): { evidence?: number[] } => {
+  if (!Array.isArray(value)) return {}
+  const numbers = value
+    .map(item => (typeof item === 'string' ? Number(item.replace(/^#/, '')) : item))
+    .filter((n): n is number => Number.isInteger(n) && n >= 1 && n <= sent)
+  const evidence = [...new Set(numbers)].slice(0, EVIDENCE_CAP)
+  return evidence.length > 0 ? { evidence } : {}
+}
+
 export const parsePlaybook = (text: string, posts: Post[], now: number): Playbook | undefined => {
   const parsed = extractJson(text) as { practices?: unknown; tools?: unknown } | undefined
   if (parsed === undefined || !Array.isArray(parsed.practices)) return undefined
+  const sent = selectPosts(posts, now).sent.length
 
   const practices: Practice[] = parsed.practices
-    .map((item: Record<string, unknown>): Practice => ({ practice: asString(item?.practice), why: asString(item?.why), signal: asString(item?.signal), stage: asStage(item, 'workflow') }))
+    .map((item: Record<string, unknown>): Practice => ({
+      practice: asString(item?.practice),
+      why: asString(item?.why),
+      signal: asString(item?.signal),
+      stage: asStage(item, 'workflow'),
+      ...asEvidence(item?.evidence, sent),
+    }))
     .filter(item => item.practice.length > 0)
     .slice(0, 12)
   const tools: ToolIdea[] = (Array.isArray(parsed.tools) ? parsed.tools : [])
-    .map((item: Record<string, unknown>): ToolIdea => ({ kind: asKind(item?.kind), name: asString(item?.name), what: asString(item?.what), stage: asStage(item, 'setup') }))
+    .map((item: Record<string, unknown>): ToolIdea => ({ kind: asKind(item?.kind), name: asString(item?.name), what: asString(item?.what), stage: asStage(item, 'setup'), ...asEvidence(item?.evidence, sent) }))
     .filter(item => item.name.length > 0)
     .slice(0, 8)
 
@@ -263,5 +300,51 @@ export const parsePlaybook = (text: string, posts: Post[], now: number): Playboo
     postCount: posts.length,
     practices,
     tools,
+  }
+}
+
+const hostOf = (url: string): string | undefined => {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return undefined
+  }
+}
+
+const round2 = (n: number): number => Math.round(n * 100) / 100
+
+/**
+ * How a playbook was built: every source the coach tried, how many posts each gave, how many survived
+ * duplicate removal, and the numbered posts the model saw. `fetched` is every post before duplicates were removed.
+ */
+export const buildTrail = (config: FeedConfig, fetched: Post[], kept: Post[], now: number, model: string): PlaybookTrail => {
+  const { sent, chars } = selectPosts(kept, now)
+  const tried = [
+    ...config.subreddits.map(name => `r/${name}`),
+    ...(config.xMirrors.length > 0 ? config.xHandles.map(handle => `@${handle}`) : []),
+    ...config.extraFeeds.map(hostOf).filter((host): host is string => host !== undefined),
+  ]
+  const names = [...new Set([...tried, ...fetched.map(post => post.source)])]
+  const count = (list: readonly { source: string }[], name: string) => list.filter(item => item.source === name).length
+
+  return {
+    builtAt: now,
+    model,
+    sources: names.map(source => ({ source, fetched: count(fetched, source), kept: count(kept, source), sent: count(sent.map(item => item.post), source) })),
+    skippedHandles: config.xMirrors.length > 0 ? [] : config.xHandles,
+    fetched: fetched.length,
+    kept: kept.length,
+    posts: sent.map(({ n, post, weight, rank }) => ({
+      n,
+      source: post.source,
+      title: post.title || post.body.slice(0, 120),
+      ...(post.url ? { url: post.url } : {}),
+      score: post.score,
+      ...(post.publishedAt ? { publishedAt: post.publishedAt } : {}),
+      weight: round2(weight),
+      rank: round2(rank),
+    })),
+    promptChars: chars,
+    promptLimit: PROMPT_CHARS,
   }
 }

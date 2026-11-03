@@ -2,8 +2,17 @@
 
 All changes to session-coach, newest first. Pull request numbers up to #5 refer to the earlier repository `Nterlace-Solutions/session-coach`.
 
-## Unreleased
+## 0.7.2 (2026-11-02)
 
+- The guide, the line map and the transparency page share one menu, with a theme button. All three open in dark mode, and the theme you pick carries to the other pages.
+
+## 0.7.1 (2026-11-02)
+
+- The guide, the line map and the transparency page link to each other. Each feed refresh copies the guide into `~/.claude/session-coach/` beside the other two, so the links work there too. The docs snapshots are from the playbook of 2026-11-02.
+
+## 0.7.0 (2026-11-02)
+
+- A transparency page shows how the coach built its playbook and its recommendations: the sources tried, the posts kept and cut, the ranking, the posts behind each practice, and every rule with its trigger. Every feed refresh writes it to `~/.claude/session-coach/playbook-transparency.html`, and `/coach transparency` writes it now. The playbook model now cites the numbered posts behind each practice and tool, and feeds keep each post's link. The line map and the pane link to the page.
 - The first setup audit runs at the first session start, before any session history exists, and judges your setup from a new `profile` option: by default an AI application and data engineer on Snowflake, Azure containers, Snowpark Container Services and GitHub. The audit also sees the names of stack files, such as `dbt_project.yml`, `Dockerfile` and GitHub Actions workflows. Expert analysis reads the profile too, and a profile change starts a new audit.
 - Feed posts are ranked by age as well as score. Posts from the last 7 days count in full, older posts halve each week, and the playbook model sees each post's age.
 - The Hermes inbox and the `inboxFile` option are removed. The coach always fetches its own feeds.

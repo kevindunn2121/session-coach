@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Playbook Transparency</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a transit-line map of one project's life. Seven stations in order, two lines (context & cost, safety) running the whole length. */
+:root {
+  --paper: #eef1f4;
+  --panel: #ffffff;
+  --ink: #15212c;
+  --muted: #566573;
+  --rule: #cfd6dd;
+  --start: #d9481f;
+  --setup: #6d4fa3;
+  --plan: #16805f;
+  --build: #2463d1;
+  --verify: #b88400;
+  --ship: #b3165a;
+  --learn: #007a85;
+  --context: #4b6b88;
+  --safety: #c62828;
+  --code-bg: #15212c;
+  --code-ink: #e8eef4;
+  --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d141b; --panel: #151f29; --ink: #e5ecf2; --muted: #9aa9b7; --rule: #2a3946;
+    --start: #ff7a52; --setup: #a98ae6; --plan: #3cc796; --build: #6aa2ff; --verify: #f1c043; --ship: #f0609d; --learn: #3fc6d1;
+    --context: #8fb0cf; --safety: #ff6b6b; --code-bg: #0a1016; --code-ink: #e8eef4;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0d141b; --panel: #151f29; --ink: #e5ecf2; --muted: #9aa9b7; --rule: #2a3946;
+  --start: #ff7a52; --setup: #a98ae6; --plan: #3cc796; --build: #6aa2ff; --verify: #f1c043; --ship: #f0609d; --learn: #3fc6d1;
+  --context: #8fb0cf; --safety: #ff6b6b; --code-bg: #0a1016; --code-ink: #e8eef4;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+body > .site-nav:first-child { margin: -28px calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 28px calc(-1 * max(16px, env(safe-area-inset-left, 0px))); }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.02; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.6rem, 7vw, 4.6rem); font-weight: 900; letter-spacing: 0.01em; text-transform: uppercase; }
+h2 { font-size: clamp(1.9rem, 4.4vw, 2.7rem); font-weight: 800; text-transform: uppercase; }
+h3 { font-size: 1.25rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+a { color: inherit; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--build); outline-offset: 2px; }
+
+header { display: grid; gap: 14px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 0.92rem; }
+.meta b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* line map */
+.map { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; overflow-x: auto; padding: 18px 12px 8px; }
+.map svg { display: block; min-width: 860px; width: 100%; height: auto; }
+.map text { font-family: var(--display); font-weight: 800; fill: var(--ink); }
+.map .small { font-family: var(--mono); font-weight: 400; font-size: 11px; fill: var(--muted); letter-spacing: 0.06em; }
+.map a:hover circle.ring, .map a:focus circle.ring { stroke-width: 9; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.86rem; color: var(--muted); padding: 8px 6px 4px; }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; width: 26px; height: 0; border-top: 5px solid var(--c); }
+.legend i.dash { border-top-style: dashed; }
+
+/* station sections */
+.station { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 0 20px; scroll-margin-top: 16px; }
+.track { position: relative; display: flex; justify-content: center; }
+.track::before { content: ""; position: absolute; top: 0; bottom: -40px; width: 8px; background: var(--c); border-radius: 4px; opacity: 0.9; }
+.station:last-of-type .track::before { bottom: 0; }
+.stop { position: relative; z-index: 1; width: 56px; height: 56px; border-radius: 50%; background: var(--panel); border: 7px solid var(--c);
+  display: grid; place-items: center; font-family: var(--display); font-weight: 900; font-size: 1.5rem; color: var(--ink); }
+.body { display: grid; gap: 16px; min-width: 0; padding-bottom: 6px; }
+.body > header { gap: 6px; }
+.body .eyebrow { color: var(--c); font-weight: 600; }
+.lede { font-size: 1.06rem; }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-top: 5px solid var(--c); border-radius: 6px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.card h4 { margin: 0; font-size: 1rem; line-height: 1.3; }
+.card .why { color: var(--muted); font-size: 0.93rem; }
+.card .see { font-size: 0.9rem; border-left: 3px solid var(--rule); padding-left: 10px; }
+.card .see b { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+.box { border: 1px dashed var(--rule); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.box h5 { margin: 0; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.box ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 0.93rem; }
+.kind { display: inline-block; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--c); color: var(--c); border-radius: 3px; padding: 0 5px; margin-right: 6px; }
+code { font-family: var(--mono); font-size: 0.88em; }
+
+/* kickoff prompt */
+.prompt { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 16px; align-items: start; }
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 6px; overflow: hidden; min-width: 0; }
+.code .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.code .bar span { font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.75; }
+.code button { font: 600 0.85rem var(--body); background: var(--start); color: #fff; border: 0; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+.code pre { margin: 0; padding: 14px 16px 16px; overflow-x: auto; font-family: var(--mono); font-size: 0.84rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.code .ln { display: block; padding-left: 12px; border-left: 4px solid var(--lc, transparent); margin-bottom: 2px; }
+.code .fill { color: #ffd58a; }
+.keymap { display: grid; gap: 10px; }
+.keymap div { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.92rem; }
+.keymap i { width: 14px; height: 14px; border-radius: 50%; background: var(--c); margin-top: 4px; }
+.addon { display: grid; gap: 6px; }
+.addon summary { cursor: pointer; font-weight: 700; }
+.addon pre { margin: 6px 0 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; overflow-x: auto; font-family: var(--mono); font-size: 0.82rem; white-space: pre-wrap; }
+
+/* rails */
+.rails { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.rail { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 12px; align-content: start; scroll-margin-top: 16px; position: relative; overflow: hidden; }
+.rail::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 7px; background: var(--c); }
+.rail.safety::before { background: repeating-linear-gradient(135deg, var(--safety) 0 12px, var(--ink) 12px 24px); }
+.rail.context::before { background: repeating-linear-gradient(90deg, var(--context) 0 16px, transparent 16px 26px); }
+.rail h2 { font-size: 1.8rem; }
+.rail ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+
+.coachnote { border: 2px solid var(--ink); border-radius: 6px; padding: 16px 18px; display: grid; gap: 8px; background: var(--panel); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--mono); font-size: 0.74rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--c); color: var(--c); white-space: nowrap; }
+footer { color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
+
+@media (max-width: 720px) {
+  .station { grid-template-columns: 44px minmax(0, 1fr); gap: 0 12px; }
+  .stop { width: 42px; height: 42px; border-width: 6px; font-size: 1.15rem; }
+  .track::before { width: 6px; }
+  .prompt { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stop { transition: transform 160ms ease; }
+  .station:target .stop, .station:hover .stop { transform: scale(1.08); }
+}
+.empty { color: var(--muted); font-style: italic; }
+.rail .signal { color: var(--muted); }
+
+.banner { border: 2px solid var(--safety); border-radius: 6px; padding: 12px 16px; background: var(--panel); }
+.funnel { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; counter-reset: f; }
+.funnel li { background: var(--panel); border: 1px solid var(--rule); border-left: 7px solid var(--build); border-radius: 6px; padding: 12px 16px; display: grid; gap: 2px; }
+.funnel li:last-child { border-left-color: var(--start); }
+.funnel b { font-family: var(--display); font-size: 2.4rem; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.funnel span { font-weight: 700; }
+.funnel small { color: var(--muted); font-size: 0.86rem; }
+.steps { display: flex; flex-wrap: wrap; gap: 8px; }
+.steps a { font-family: var(--mono); font-size: 0.8rem; text-decoration: none; border: 1px solid var(--rule); background: var(--panel); border-radius: 999px; padding: 6px 12px; min-height: 36px; display: inline-flex; align-items: center; }
+.step { display: grid; gap: 14px; scroll-margin-top: 16px; }
+.step > .eyebrow { color: var(--build); font-weight: 600; }
+.tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; white-space: nowrap; }
+td { font-variant-numeric: tabular-nums; }
+tbody tr:last-child td { border-bottom: 0; }
+tr.zero td { color: var(--muted); font-style: italic; }
+tr.cited td { background: color-mix(in srgb, var(--plan) 9%, transparent); }
+tr:target td { outline: 2px solid var(--build); outline-offset: -2px; }
+.posts td.title { min-width: 260px; }
+.note { color: var(--muted); font-size: 0.92rem; }
+.formula { background: var(--code-bg); color: var(--code-ink); border-radius: 6px; padding: 14px 18px; font-size: 1.05rem; overflow-x: auto; }
+.facts { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 80ch; }
+.meter { height: 12px; border-radius: 6px; background: var(--rule); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--build); }
+.cites { font-size: 0.86rem; display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cites.none { color: var(--muted); font-style: italic; }
+.cite { font-family: var(--mono); font-size: 0.78rem; border: 1px solid var(--plan); color: var(--plan); border-radius: 3px; padding: 0 5px; text-decoration: none; }
+.card { scroll-margin-top: 16px; }
+.card .eyebrow { color: var(--c); font-weight: 600; }
+.card:target { outline: 3px solid var(--c); }
+.tools { gap: 10px !important; }
+.tools li:target { outline: 2px solid var(--build); }
+.lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+.lane { background: var(--panel); border: 1px solid var(--rule); border-top: 7px solid var(--c); border-radius: 6px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.lane .eyebrow { color: var(--c); font-weight: 600; }
+blockquote { margin: 0; border-left: 5px solid var(--build); background: var(--panel); padding: 12px 16px; border-radius: 0 6px 6px 0; font-size: 0.92rem; max-width: 90ch; }
+
+.site-nav { --nav-bg: #151f29; --nav-ink: #e5ecf2; --nav-muted: #9aa9b7; --nav-rule: #2a3946; --nav-accent: #a98ae6;
+  position: sticky; top: 0; z-index: 50; background: var(--nav-bg); color: var(--nav-ink); border-bottom: 1px solid var(--nav-rule);
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace; font-size: 0.82rem; }
+:root[data-theme="light"] .site-nav { --nav-bg: #ffffff; --nav-ink: #15212c; --nav-muted: #566573; --nav-rule: #cfd6dd; --nav-accent: #6d4fa3; }
+.site-nav-in { max-width: var(--site-nav-max, 1080px); margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.site-nav-brand { font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nav-muted); margin-right: auto; }
+.site-nav-links { display: flex; flex-wrap: wrap; gap: 4px; }
+.site-nav a, .site-nav button { color: var(--nav-ink); text-decoration: none; min-height: 36px; padding: 6px 12px; border-radius: 999px;
+  display: inline-flex; align-items: center; border: 1px solid transparent; background: none; font: inherit; cursor: pointer; }
+.site-nav a:hover, .site-nav button:hover { border-color: var(--nav-rule); }
+.site-nav a[aria-current="page"] { border-color: var(--nav-accent); color: var(--nav-accent); font-weight: 600; }
+.site-nav button { border-color: var(--nav-rule); color: var(--nav-muted); }
+.site-nav a:focus-visible, .site-nav button:focus-visible { outline: 3px solid var(--nav-accent); outline-offset: 2px; }
+@media (max-width: 600px) { .site-nav-brand { flex-basis: 100%; } .site-nav a, .site-nav button { padding: 6px 9px; } }
+</style>
+</head>
+<body>
+<nav class="site-nav" aria-label="session-coach pages"><div class="site-nav-in"><span class="site-nav-brand">session-coach</span><div class="site-nav-links"><a href="session-coach-guide.html">Guide</a><a href="playbook-line-map.html">Line map</a><a href="playbook-transparency.html" aria-current="page">How it was built</a></div><button type="button" class="site-nav-theme" id="navTheme" aria-label="Switch color theme">Light</button></div></nav>
+<script>
+(function () {
+  var root = document.documentElement, key = 'session-coach-theme', button = document.getElementById('navTheme');
+  try { var saved = localStorage.getItem(key); if (saved === 'light' || saved === 'dark') root.dataset.theme = saved; } catch (e) {}
+  var label = function () { if (button) button.textContent = root.dataset.theme === 'light' ? 'Dark' : 'Light'; };
+  new MutationObserver(function () {
+    label();
+    try { localStorage.setItem(key, root.dataset.theme); } catch (e) {}
+  }).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+  if (button) button.addEventListener('click', function () {
+    var own = document.getElementById('tg');
+    if (own) own.click();
+    else root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
+  });
+  label();
+})();
+</script>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Session coach · transparency · show our work</span>
+    <h1>How the coach built its advice</h1>
+    <p class="lede">Each feed refresh writes this page again. It shows what the coach read, how it ranked and cut the posts, which posts back each practice, and the rules that turn the playbook into recommendations.</p>
+    <div class="meta">
+      <span>Playbook <b>2026-11-02</b></span>
+      <span>Model <b>claude-sonnet-5-5</b></span>
+      <span>Last refresh <b>ok</b></span>
+      <span>Page written <b>2026-11-02 23:30 UTC</b></span>
+    </div>
+  </header>
+  
+  <ol class="funnel" aria-label="From posts to playbook"><li><b>94</b><span>posts fetched</span><small>8 of 12 sources answered</small></li><li><b>94</b><span>kept</span><small>0 duplicates removed</small></li><li><b>64</b><span>sent to the model</span><small>30 cut at 24,000 characters</small></li><li><b>12 + 6</b><span>practices + tools</span><small>18 cite a post</small></li></ol>
+  <nav class="steps" aria-label="Steps">
+    <a href="#sources">1 Read</a><a href="#rank">2 Rank</a><a href="#cut">3 Cut</a><a href="#distill">4 Distill</a><a href="#engine">5 Recommend</a>
+  </nav>
+
+  <section class="step" id="sources"><span class="eyebrow">Step 1</span><h2>Read the sources</h2>
+    <div class="tablewrap"><table><thead><tr><th>Source</th><th>Fetched</th><th>Kept</th><th>Sent</th></tr></thead><tbody><tr class=""><td><code>r/ClaudeAI</code></td><td>12</td><td>12</td><td>12</td></tr><tr class="zero"><td><code>r/ClaudeCode</code></td><td>no posts reached</td><td>0</td><td>0</td></tr><tr class="zero"><td><code>r/ChatGPTCoding</code></td><td>no posts reached</td><td>0</td><td>0</td></tr><tr class="zero"><td><code>r/LocalLLaMA</code></td><td>no posts reached</td><td>0</td><td>0</td></tr><tr class="zero"><td><code>r/AI_Agents</code></td><td>no posts reached</td><td>0</td><td>0</td></tr><tr class=""><td><code>simonwillison.net</code></td><td>12</td><td>12</td><td>12</td></tr><tr class=""><td><code>hamel.dev</code></td><td>12</td><td>12</td><td>6</td></tr><tr class=""><td><code>eugeneyan.com</code></td><td>12</td><td>12</td><td>3</td></tr><tr class=""><td><code>www.latent.space</code></td><td>12</td><td>12</td><td>12</td></tr><tr class=""><td><code>karpathy.bearblog.dev</code></td><td>10</td><td>10</td><td>2</td></tr><tr class=""><td><code>jxnl.co</code></td><td>12</td><td>12</td><td>5</td></tr><tr class=""><td><code>addyo.substack.com</code></td><td>12</td><td>12</td><td>12</td></tr></tbody></table></div><p class="note">X has no free API and no mirror is set, so 8 X accounts were not read: <code>@bcherny</code> <code>@_catwu</code> <code>@alexalbert__</code> <code>@karpathy</code> <code>@swyx</code> <code>@simonw</code> <code>@HamelHusain</code> <code>@eugeneyan</code>. Set <code>xMirrors</code> to read them, or save posts with <code>/coach paste</code>.</p>
+      <p class="note">Each source gives at most 12 posts. Reddit is read through RSS because its JSON API refuses anonymous clients. Kept means the post survived duplicate removal: two posts with the same title count once.</p>
+  </section>
+
+  <section class="step" id="rank"><span class="eyebrow">Step 2</span><h2>Rank by score and age</h2>
+    
+      <div class="formula" aria-label="Ranking formula"><code>rank = (1 + log2(1 + score)) × recency</code></div>
+      <ul class="facts">
+        <li><b>Score</b> is the post's upvotes. Only Reddit gives one; every other post starts at 0, so recency decides.</li>
+        <li><b>Recency</b> is 1 for a post from the last 7 days. After that it halves for each further week: 0.5 at 14 days, 0.25 at 21.</li>
+        <li><b>Undated</b> posts count 0.5. <b>Pasted</b> posts count as new, because you chose them.</li>
+      </ul>
+  </section>
+
+  <section class="step" id="cut"><span class="eyebrow">Step 3</span><h2>Cut to fit, then number</h2>
+    
+      <div class="meter" role="img" aria-label="23942 of 24000 characters used"><i style="width: 100%"></i></div>
+      <p class="note">The model saw <b>64</b> posts in <b>23,942</b> of 24,000 characters, best rank first. The next post would not fit, so 30 lower-ranked posts were cut. Highlighted rows back at least one practice or tool.</p>
+      <div class="tablewrap"><table class="posts"><thead><tr><th>#</th><th>Source</th><th>Post</th><th>Age</th><th>Score</th><th>Recency</th><th>Rank</th><th>Cited by</th></tr></thead><tbody><tr id="post-1" class=""><td>#1</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xjqyv2/claude_now_watermarks_everything_it_writes_and/" rel="noopener">Claude now watermarks everything it writes, and you&#39;re the one who can&#39;t check</a></td><td>3d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-2" class=""><td>#2</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xiixew/meet_claudes_standards_or_else/" rel="noopener">Meet Claude&#39;s standards... or else.</a></td><td>4d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-3" class=""><td>#3</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xlkghv/opus_55_surviving_the_entire_october_ai_release/" rel="noopener">Opus 5.5 surviving the entire October AI release cycle 😂</a></td><td>0d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-4" class=""><td>#4</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xl47f5/anthropics_mythosclass_model_allegedly_leaked_on/" rel="noopener">Anthropic&#39;s Mythos-class model allegedly leaked on Hugging Face 💀</a></td><td>1d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-5" class="cited"><td>#5</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xgu73u/claude_opus_55_is_insane_in_creating_creating_3d/" rel="noopener">Claude Opus 5.5 is insane in creating creating 3D movies.</a></td><td>6d</td><td>0</td><td>1</td><td>1</td><td><a href="#p9">P9</a></td></tr><tr id="post-6" class=""><td>#6</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xkxsca/i_gave_claude_access_to_remote_telescopes_now_she/" rel="noopener">I gave Claude access to remote telescopes. Now she books the sky every night.</a></td><td>1d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-7" class="cited"><td>#7</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xkg97u/security_engineer_here_the_antiai_hate_is_getting/" rel="noopener">Security engineer here. The anti-AI hate is getting ridiculous</a></td><td>2d</td><td>0</td><td>1</td><td>1</td><td><a href="#p1">P1</a> <a href="#t2">T2</a></td></tr><tr id="post-8" class=""><td>#8</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xigpgr/we_used_claude_to_get_a_full_ps2_emulator_running/" rel="noopener">We used Claude to get a full PS2 emulator running in a browser tab: TabStationToo</a></td><td>4d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-9" class="cited"><td>#9</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xh3yyu/claude_code_usage_exploded_8x_today_anthropic/" rel="noopener">Claude Code usage exploded 8x today. Anthropic confirmed service errors consume our paid limits — and they won&#39;t compensate users</a></td><td>6d</td><td>0</td><td>1</td><td>1</td><td><a href="#p4">P4</a> <a href="#t3">T3</a></td></tr><tr id="post-10" class=""><td>#10</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xjlvlc/anthropic_renames_max5_and_max20_and_removes_5h/" rel="noopener">Anthropic renames Max5 and Max20 and removes 5h limits for Max20</a></td><td>3d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-11" class="cited"><td>#11</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xguw7r/claude_is_performing_38x_poorer_compared_to_last/" rel="noopener">Claude is performing 3.8x poorer compared to last week based on my claude code token analysis</a></td><td>6d</td><td>0</td><td>1</td><td>1</td><td><a href="#p2">P2</a> <a href="#p3">P3</a> <a href="#p4">P4</a> <a href="#t3">T3</a> <a href="#t4">T4</a></td></tr><tr id="post-12" class=""><td>#12</td><td><code>r/ClaudeAI</code></td><td class="title"><a href="https://www.reddit.com/r/ClaudeAI/comments/1xjxl4s/claude_opus_55_can_generate_images_even_though_it/" rel="noopener">Claude Opus 5.5 can generate images even though it will initially say it can&#39;t.</a></td><td>2d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-13" class=""><td>#13</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Nov/2/census-bureau-super-intelligence/" rel="noopener">The U.S. Census Bureau and “Super Intelligence”</a></td><td>0d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-14" class="cited"><td>#14</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Nov/1/delete-uv-lock-first/" rel="noopener">If in doubt, delete the uv.lock file</a></td><td>1d</td><td>0</td><td>1</td><td>1</td><td><a href="#t6">T6</a></td></tr><tr id="post-15" class=""><td>#15</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Nov/1/kyle-kingsbury/" rel="noopener">Quoting Kyle Kingsbury</a></td><td>1d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-16" class="cited"><td>#16</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/31/how-we-took-over-chatgpt-accounts/" rel="noopener">How We Took Over ChatGPT Accounts</a></td><td>2d</td><td>0</td><td>1</td><td>1</td><td><a href="#p12">P12</a></td></tr><tr id="post-17" class=""><td>#17</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/31/datasette-llm/" rel="noopener">datasette-llm 0.1a9</a></td><td>2d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-18" class="cited"><td>#18</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/30/nesformer/" rel="noopener">dbreunig/nesformer</a></td><td>3d</td><td>0</td><td>1</td><td>1</td><td><a href="#p9">P9</a></td></tr><tr id="post-19" class=""><td>#19</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/29/api-credits/" rel="noopener">API credits benefit for eligible ChatGPT subscriptions</a></td><td>4d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-20" class=""><td>#20</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/29/how-i-built-the-most-ai-pilled-company-in-the-world/" rel="noopener">Building a multiplayer game world with autonomous Fable-class models</a></td><td>4d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-21" class=""><td>#21</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/29/ben-hylak/" rel="noopener">Quoting Ben Hylak</a></td><td>4d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-22" class=""><td>#22</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/28/ted-sanders/" rel="noopener">Quoting Ted Sanders</a></td><td>5d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-23" class=""><td>#23</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/28/github-octoverse-2026/" rel="noopener">GitHub Octoverse 2026</a></td><td>5d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-24" class=""><td>#24</td><td><code>simonwillison.net</code></td><td class="title"><a href="https://simonwillison.net/2026/Oct/28/vibe-game-development/" rel="noopener">The October inflection point for vibe game development</a></td><td>5d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-25" class=""><td>#25</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/building-ai-for-lawyers-jacob-lauritzen-cto-of-legora/" rel="noopener">Building AI for Lawyers - Jacob Lauritzen, CTO of Legora</a></td><td>0d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-26" class=""><td>#26</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/building_legal_agents_when_you_can_t_see_the_data_-_jacob_lauritzen_cto_of_legora/" rel="noopener">Building Legal Agents When You Can&#39;t See the Data - Jacob Lauritzen, CTO of Legora</a></td><td>0d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-27" class=""><td>#27</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/arca/" rel="noopener">Agents Prompt People: Using Agents for Long-Horizon Financial Work</a></td><td>2d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-28" class=""><td>#28</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/ainews-google-admits-ai-mode-hurts-search-revenue-15-500b-drop-worst-since-2004-ipo-ai-bear-market-c/" rel="noopener">[AINews] Google admits AI Mode hurts Search revenue; -15% $500B drop worst since 2004 IPO. AI Bear Market coming?</a></td><td>2d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-29" class=""><td>#29</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/ainews-building-aie-code-the-top-coding-agent-conference/" rel="noopener">[AINews] Building AIE CODE: The top Coding Agent Conference</a></td><td>3d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-30" class=""><td>#30</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/elorian/" rel="noopener">Can Frontier Models See Past a Decoy? Elorian Tests Visual Reasoning</a></td><td>4d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-31" class=""><td>#31</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/ainews-gemini-4-carbon/" rel="noopener">[AINews] Gemini 4 Carbon tops leaderboards, launches for cyber defenders</a></td><td>4d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-32" class=""><td>#32</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/supabase/" rel="noopener">Why Agents Love Supabase</a></td><td>5d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-33" class=""><td>#33</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/ainews-anthropic-ends-coding-interviews-hunger-beats-tenure/" rel="noopener">[AINews] Anthropic ends Coding Interviews: &quot;Hunger beats tenure&quot;</a></td><td>5d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-34" class=""><td>#34</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/opus55/" rel="noopener">How Anthropic ships Claude with Claude: Separating the Brain from the Hands</a></td><td>6d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-35" class=""><td>#35</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/how_anthropic_ships_the_1_llm_in_the_world_safely_separating_the_brain_from_the_hands/" rel="noopener">How Anthropic ships the #1 LLM in the World safely: Separating the Brain from the Hands</a></td><td>6d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-36" class=""><td>#36</td><td><code>www.latent.space</code></td><td class="title"><a href="https://latent.space/p/offline-coding/" rel="noopener">Coding From the Himalayas With an Offline AI Agent</a></td><td>6d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-37" class=""><td>#37</td><td><code>karpathy.bearblog.dev</code></td><td class="title"><a href="https://karpathy.bearblog.dev/hacker-tube/" rel="noopener">HackerTube</a></td><td>2d</td><td>0</td><td>1</td><td>1</td><td>–</td></tr><tr id="post-38" class=""><td>#38</td><td><code>hamel.dev</code></td><td class="title"><a href="https://hamel.dev/blog/posts/decision-model-evals/" rel="noopener">How To Use Decision Models for Evals</a></td><td>13d</td><td>0</td><td>0.52</td><td>0.52</td><td>–</td></tr><tr id="post-39" class="cited"><td>#39</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/agentic-verification" rel="noopener">Agentic Verification</a></td><td>19d</td><td>0</td><td>0.29</td><td>0.29</td><td><a href="#p6">P6</a></td></tr><tr id="post-40" class="cited"><td>#40</td><td><code>hamel.dev</code></td><td class="title"><a href="https://hamel.dev/blog/posts/claude-auto-evals/" rel="noopener">Claude’s new auto eval tool</a></td><td>33d</td><td>0</td><td>0.07</td><td>0.07</td><td><a href="#p5">P5</a> <a href="#t1">T1</a></td></tr><tr id="post-41" class="cited"><td>#41</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/the-code-nobody-reads" rel="noopener">The Code Nobody Reads</a></td><td>35d</td><td>0</td><td>0.06</td><td>0.06</td><td><a href="#p1">P1</a> <a href="#p6">P6</a></td></tr><tr id="post-42" class="cited"><td>#42</td><td><code>hamel.dev</code></td><td class="title"><a href="https://hamel.dev/blog/posts/evals-faq/" rel="noopener">AI Evals: Everything You Need to Know</a></td><td>45d</td><td>0</td><td>0.02</td><td>0.02</td><td><a href="#p5">P5</a></td></tr><tr id="post-43" class=""><td>#43</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/brownfield-agentic-engineering" rel="noopener">Brownfield Agentic Engineering</a></td><td>49d</td><td>0</td><td>0.02</td><td>0.02</td><td>–</td></tr><tr id="post-44" class=""><td>#44</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/agentic-skill-decay" rel="noopener">Agentic Skill Decay</a></td><td>63d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-45" class="cited"><td>#45</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/audit-your-agent-files" rel="noopener">Audit your Agent files</a></td><td>67d</td><td>0</td><td>0</td><td>0</td><td><a href="#p8">P8</a> <a href="#t5">T5</a></td></tr><tr id="post-46" class="cited"><td>#46</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/human-judgment-doesnt-leave-the-software" rel="noopener">Human judgment doesn&#39;t leave the software factory. It relocates.</a></td><td>73d</td><td>0</td><td>0</td><td>0</td><td><a href="#p10">P10</a></td></tr><tr id="post-47" class="cited"><td>#47</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/practical-loop-engineering" rel="noopener">Practical Loop Engineering</a></td><td>80d</td><td>0</td><td>0</td><td>0</td><td><a href="#p10">P10</a></td></tr><tr id="post-48" class=""><td>#48</td><td><code>hamel.dev</code></td><td class="title"><a href="https://hamel.dev/" rel="noopener">AI Product Engineering Notes</a></td><td>82d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-49" class="cited"><td>#49</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/agentic-code-quality" rel="noopener">Agentic Code Quality</a></td><td>86d</td><td>0</td><td>0</td><td>0</td><td><a href="#p7">P7</a></td></tr><tr id="post-50" class=""><td>#50</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/software-factories-light-and-dark" rel="noopener">Software Factories, Light and Dark</a></td><td>103d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-51" class="cited"><td>#51</td><td><code>hamel.dev</code></td><td class="title"><a href="https://hamel.dev/" rel="noopener">Do Automated Evals Work?</a></td><td>114d</td><td>0</td><td>0</td><td>0</td><td><a href="#p5">P5</a></td></tr><tr id="post-52" class="cited"><td>#52</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/own-the-outer-loop" rel="noopener">Own the Outer Loop</a></td><td>116d</td><td>0</td><td>0</td><td>0</td><td><a href="#p10">P10</a></td></tr><tr id="post-53" class=""><td>#53</td><td><code>jxnl.co</code></td><td class="title"><a href="https://jxnl.co/writing/2026/07/05/taste/" rel="noopener">If You Want Taste, You&#39;re Gonna Have to Eat</a></td><td>120d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-54" class="cited"><td>#54</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/agentic-autonomy-levels" rel="noopener">Agentic Autonomy Levels</a></td><td>122d</td><td>0</td><td>0</td><td>0</td><td><a href="#p11">P11</a></td></tr><tr id="post-55" class=""><td>#55</td><td><code>hamel.dev</code></td><td class="title"><a href="https://hamel.dev/blog/posts/eval-smell/" rel="noopener">“It’s Hard to Eval” Is a Product Smell</a></td><td>126d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-56" class=""><td>#56</td><td><code>jxnl.co</code></td><td class="title"><a href="https://jxnl.co/writing/2026/06/28/two-kinds-of-scheduled-work-in-codex/" rel="noopener">Two kinds of scheduled work in Codex</a></td><td>127d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-57" class="cited"><td>#57</td><td><code>eugeneyan.com</code></td><td class="title"><a href="https://eugeneyan.com//writing/cybersecurity-evals/" rel="noopener">Patterns for Building Cybersecurity Evals</a></td><td>134d</td><td>0</td><td>0</td><td>0</td><td><a href="#p12">P12</a></td></tr><tr id="post-58" class="cited"><td>#58</td><td><code>addyo.substack.com</code></td><td class="title"><a href="https://addyo.substack.com/p/agentic-code-review" rel="noopener">Agentic Code Review</a></td><td>139d</td><td>0</td><td>0</td><td>0</td><td><a href="#p1">P1</a> <a href="#p11">P11</a> <a href="#t2">T2</a></td></tr><tr id="post-59" class=""><td>#59</td><td><code>jxnl.co</code></td><td class="title"><a href="https://jxnl.co/writing/2026/06/16/three-ways-codex-can-use-a-computer/" rel="noopener">Three Ways Codex Can Use a Computer</a></td><td>139d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-60" class=""><td>#60</td><td><code>eugeneyan.com</code></td><td class="title"><a href="https://eugeneyan.com//writing/secure-source-code/" rel="noopener">Using LLMs to Secure Source Code</a></td><td>159d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-61" class=""><td>#61</td><td><code>jxnl.co</code></td><td class="title"><a href="https://jxnl.co/writing/2026/05/18/six-levels-of-complexity-of-an-ai-powered-morning-brief-with-codex/" rel="noopener">Six levels of complexity in a Codex morning brief</a></td><td>168d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-62" class=""><td>#62</td><td><code>jxnl.co</code></td><td class="title"><a href="https://jxnl.co/writing/2026/05/10/codex-maxxing/" rel="noopener">Codex-maxxing</a></td><td>176d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr><tr id="post-63" class="cited"><td>#63</td><td><code>eugeneyan.com</code></td><td class="title"><a href="https://eugeneyan.com//writing/working-with-ai/" rel="noopener">How to Work and Compound with AI</a></td><td>183d</td><td>0</td><td>0</td><td>0</td><td><a href="#p6">P6</a> <a href="#p7">P7</a></td></tr><tr id="post-64" class=""><td>#64</td><td><code>karpathy.bearblog.dev</code></td><td class="title"><a href="https://karpathy.bearblog.dev/sequoia-ascent-2026/" rel="noopener">Sequoia Ascent 2026 summary</a></td><td>186d</td><td>0</td><td>0</td><td>0</td><td>–</td></tr></tbody></table></div>
+  </section>
+
+  <section class="step" id="distill"><span class="eyebrow">Step 4</span><h2>Distill the playbook</h2>
+    
+      <ul class="facts">
+        <li>The playbook model, <code>claude-sonnet-5-5</code>, reads the numbered posts as data, not instructions.</li>
+        <li>It returns at most 12 practices and 8 tools, skips hype, news and model gossip, and puts each item on a station of the <a href="playbook-line-map.html">line map</a>.</li>
+        <li>It cites the posts behind each item by number. A cited number that names no post it saw is dropped.</li>
+      </ul>
+      <div class="cols"><article class="card" id="p1" style="--c: var(--verify)"><span class="eyebrow">P1 · 5 Verify</span><h4>Plan the work, have a second agent review it, then review and test it yourself before shipping</h4><p class="why">A plan, an independent agent review and a human check keep AI-built code from being unreviewed &#39;vibe coding&#39;.</p><span class="cites">Backed by <a class="cite" href="#post-7">#7</a> <a class="cite" href="#post-58">#58</a> <a class="cite" href="#post-41">#41</a></span></article><article class="card" id="p2" style="--c: var(--context)"><span class="eyebrow">P2 · Context &amp; cost line</span><h4>Start a fresh session once context reaches roughly 300-400K tokens</h4><p class="why">Long contexts burn quota faster and degrade output quality.</p><span class="cites">Backed by <a class="cite" href="#post-11">#11</a></span></article><article class="card" id="p3" style="--c: var(--context)"><span class="eyebrow">P3 · Context &amp; cost line</span><h4>Turn off or limit subagents when token usage spikes</h4><p class="why">Subagent fan-out can multiply token consumption per task and drain weekly limits.</p><span class="cites">Backed by <a class="cite" href="#post-11">#11</a></span></article><article class="card" id="p4" style="--c: var(--context)"><span class="eyebrow">P4 · Context &amp; cost line</span><h4>Measure token consumption with a usage tool such as ccusage before blaming the model</h4><p class="why">Measured numbers show whether usage or quality has really changed instead of guessing.</p><span class="cites">Backed by <a class="cite" href="#post-9">#9</a> <a class="cite" href="#post-11">#11</a></span></article><article class="card" id="p5" style="--c: var(--verify)"><span class="eyebrow">P5 · 5 Verify</span><h4>Build evals from real conversation traces and check the graders themselves</h4><p class="why">Automated graders can disagree with human judgment, so they must be validated against annotated traces.</p><span class="cites">Backed by <a class="cite" href="#post-40">#40</a> <a class="cite" href="#post-51">#51</a> <a class="cite" href="#post-42">#42</a></span></article><article class="card" id="p6" style="--c: var(--verify)"><span class="eyebrow">P6 · 5 Verify</span><h4>Treat verification as the bottleneck and write checks that prove correctness, not just that code was produced</h4><p class="why">Writing code is now cheap, while knowing it is correct is the scarce part.</p><span class="cites">Backed by <a class="cite" href="#post-39">#39</a> <a class="cite" href="#post-41">#41</a> <a class="cite" href="#post-63">#63</a></span></article><article class="card" id="p7" style="--c: var(--setup)"><span class="eyebrow">P7 · 2 Set up</span><h4>Set constraints around agents (lints, tests, rules) rather than relying on prompt wording for code quality</h4><p class="why">Quality depends on the guardrails the agent works inside.</p><span class="cites">Backed by <a class="cite" href="#post-49">#49</a> <a class="cite" href="#post-63">#63</a></span></article><article class="card" id="p8" style="--c: var(--learn)"><span class="eyebrow">P8 · 7 Learn</span><h4>Audit agent instruction files periodically and remove what the agent no longer needs</h4><p class="why">Stale or bloated rules waste context and can mislead the agent.</p><span class="cites">Backed by <a class="cite" href="#post-45">#45</a></span></article><article class="card" id="p9" style="--c: var(--start)"><span class="eyebrow">P9 · 1 Start</span><h4>Give the agent a detailed prompt that states the goal, source material to read first, and constraints</h4><p class="why">Specific framing with pointers to relevant sources produces better first results on exploratory tasks.</p><span class="cites">Backed by <a class="cite" href="#post-18">#18</a> <a class="cite" href="#post-5">#5</a></span></article><article class="card" id="p10" style="--c: var(--plan)"><span class="eyebrow">P10 · 3 Plan</span><h4>Keep human judgment on the outer loop and don&#39;t delegate decisions about goals and acceptance</h4><p class="why">Agents can finish tasks without owner judgment, and the human must set the boundary.</p><span class="cites">Backed by <a class="cite" href="#post-47">#47</a> <a class="cite" href="#post-52">#52</a> <a class="cite" href="#post-46">#46</a></span></article><article class="card" id="p11" style="--c: var(--safety)"><span class="eyebrow">P11 · Safety line</span><h4>Choose an autonomy level per task and match review depth to the risk</h4><p class="why">Not all work warrants the same level of oversight.</p><span class="cites">Backed by <a class="cite" href="#post-54">#54</a> <a class="cite" href="#post-58">#58</a></span></article><article class="card" id="p12" style="--c: var(--safety)"><span class="eyebrow">P12 · Safety line</span><h4>Run untrusted generated HTML or code in a tight sandbox</h4><p class="why">Sandbox escapes in rendered artifacts can expose private data and APIs.</p><span class="cites">Backed by <a class="cite" href="#post-16">#16</a> <a class="cite" href="#post-57">#57</a></span></article></div>
+      <div class="box"><h5>Tools to add</h5><ul class="tools"><li id="t1"><b>T1</b> <span class="kind" style="--c: var(--verify)">command</span><code>build-eval-hill-climb</code> The claude-api plugin&#39;s build_eval and hill-climb commands build evals, check the graders and iterate the app against them. <span class="chip" style="--c: var(--verify)">5 Verify</span> <span class="cites">Backed by <a class="cite" href="#post-40">#40</a></span></li><li id="t2"><b>T2</b> <span class="kind" style="--c: var(--verify)">agent</span><code>second-agent-reviewer</code> A separate reviewer agent critiques plans and diffs before the human review. <span class="chip" style="--c: var(--verify)">5 Verify</span> <span class="cites">Backed by <a class="cite" href="#post-7">#7</a> <a class="cite" href="#post-58">#58</a></span></li><li id="t3"><b>T3</b> <span class="kind" style="--c: var(--context)">command</span><code>ccusage</code> A CLI that reports Claude Code token consumption so usage anomalies can be investigated. <span class="chip" style="--c: var(--context)">Context &amp; cost line</span> <span class="cites">Backed by <a class="cite" href="#post-9">#9</a> <a class="cite" href="#post-11">#11</a></span></li><li id="t4"><b>T4</b> <span class="kind" style="--c: var(--context)">habit</span><code>fresh-session-at-context-threshold</code> Restart with a handoff summary after about 300-400K tokens of context. <span class="chip" style="--c: var(--context)">Context &amp; cost line</span> <span class="cites">Backed by <a class="cite" href="#post-11">#11</a></span></li><li id="t5"><b>T5</b> <span class="kind" style="--c: var(--learn)">habit</span><code>agent-file-audit</code> Review the agent instruction files regularly and cut out anything the agent no longer needs. <span class="chip" style="--c: var(--learn)">7 Learn</span> <span class="cites">Backed by <a class="cite" href="#post-45">#45</a></span></li><li id="t6"><b>T6</b> <span class="kind" style="--c: var(--build)">habit</span><code>delete-stale-uv-lock</code> When getting confusing dependency errors in a library project, delete the gitignored uv.lock and re-run. <span class="chip" style="--c: var(--build)">4 Build</span> <span class="cites">Backed by <a class="cite" href="#post-14">#14</a></span></li></ul></div>
+  </section>
+
+  <section class="step" id="engine"><span class="eyebrow">Step 5</span><h2>Turn it into recommendations</h2>
+    
+      <div class="lanes">
+        <div class="lane" style="--c: var(--verify)"><span class="eyebrow">Lane 1 · no model</span><h3>Rule tips</h3><p>Counted from every prompt, tool call and turn. A rule fires when its trigger is met, with a fixed priority, category, station and timing.</p></div>
+        <div class="lane" style="--c: var(--build)"><span class="eyebrow">Lane 2 · claude-sonnet-5-5</span><h3>Expert suggestions</h3><p>Runs every 3 turns. Compares your metrics, score, rule tips and profile with the practices above and returns up to 4 suggestions.</p></div>
+        <div class="lane" style="--c: var(--setup)"><span class="eyebrow">Lane 3 · claude-sonnet-5-5</span><h3>Setup audit</h3><p>Runs daily and when your setup files change. Compares CLAUDE.md, settings, skills and agents with your sessions and the playbook.</p></div>
+      </div>
+      <h3>Every built-in rule</h3>
+      <div class="tablewrap"><table><thead><tr><th>Priority</th><th>Fires when</th><th>Category</th><th>Station</th><th>Fix timing</th></tr></thead><tbody><tr><td><span class="chip" style="--c: var(--safety)">P1 Critical</span></td><td>The same command fails more than once.</td><td>Quality</td><td><span class="chip" style="--c: var(--verify)">5 Verify</span></td><td>Stop first</td></tr><tr><td><span class="chip" style="--c: var(--safety)">P1 Critical</span></td><td>2 or more correction prompts.</td><td>Workflow</td><td><span class="chip" style="--c: var(--plan)">3 Plan</span></td><td>Stop first</td></tr><tr><td><span class="chip" style="--c: var(--safety)">P1 Critical</span></td><td>3 or fewer turns left before auto-compaction.</td><td>Context</td><td><span class="chip" style="--c: var(--context)">Context &amp; cost line</span></td><td>Next prompt</td></tr><tr><td><span class="chip" style="--c: var(--safety)">P1 Critical</span></td><td>One file edited 5 or more times.</td><td>Quality</td><td><span class="chip" style="--c: var(--build)">4 Build</span></td><td>Stop first</td></tr><tr><td><span class="chip" style="--c: var(--safety)">P1 Critical</span></td><td>A plan usage window at 95% or more.</td><td>Tokens &amp; cost</td><td><span class="chip" style="--c: var(--context)">Context &amp; cost line</span></td><td>Steer now</td></tr><tr><td><span class="chip" style="--c: var(--start)">P2 High</span></td><td>The context window is 75% full or more.</td><td>Context</td><td><span class="chip" style="--c: var(--context)">Context &amp; cost line</span></td><td>Next prompt</td></tr><tr><td><span class="chip" style="--c: var(--start)">P2 High</span></td><td>5 or more edits since the last test, lint or type check.</td><td>Quality</td><td><span class="chip" style="--c: var(--verify)">5 Verify</span></td><td>Steer now</td></tr><tr><td><span class="chip" style="--c: var(--start)">P2 High</span></td><td>2 or more edits to files Claude did not read this session.</td><td>Quality</td><td><span class="chip" style="--c: var(--build)">4 Build</span></td><td>Steer now</td></tr><tr><td><span class="chip" style="--c: var(--start)">P2 High</span></td><td>More than 15 edits with no plan mode.</td><td>Workflow</td><td><span class="chip" style="--c: var(--plan)">3 Plan</span></td><td>Stop first</td></tr><tr><td><span class="chip" style="--c: var(--start)">P2 High</span></td><td>Prompt cache hit rate under 50% after 5 turns.</td><td>Tokens &amp; cost</td><td><span class="chip" style="--c: var(--context)">Context &amp; cost line</span></td><td>After this session</td></tr><tr><td><span class="chip" style="--c: var(--start)">P2 High</span></td><td>A plan usage window at 80% or more.</td><td>Tokens &amp; cost</td><td><span class="chip" style="--c: var(--context)">Context &amp; cost line</span></td><td>Steer now</td></tr><tr><td><span class="chip" style="--c: var(--start)">P2 High</span></td><td>Uncommitted changes on main or master.</td><td>Git</td><td><span class="chip" style="--c: var(--ship)">6 Ship</span></td><td>Next prompt</td></tr><tr><td><span class="chip" style="--c: var(--start)">P2 High</span></td><td>10 or more changed files, or 300 or more lines, uncommitted.</td><td>Git</td><td><span class="chip" style="--c: var(--ship)">6 Ship</span></td><td>Next prompt</td></tr><tr><td><span class="chip" style="--c: var(--verify)">P3 Medium</span></td><td>More than 40% of prompts are short with no file or goal, from the third prompt on.</td><td>Context</td><td><span class="chip" style="--c: var(--start)">1 Start</span></td><td>Next prompt</td></tr><tr><td><span class="chip" style="--c: var(--verify)">P3 Medium</span></td><td>40 or more tool calls with no subagent.</td><td>Tokens &amp; cost</td><td><span class="chip" style="--c: var(--build)">4 Build</span></td><td>Steer now</td></tr><tr><td><span class="chip" style="--c: var(--verify)">P3 Medium</span></td><td>More than 2 hours since the last commit with work pending.</td><td>Git</td><td><span class="chip" style="--c: var(--ship)">6 Ship</span></td><td>Next prompt</td></tr><tr><td><span class="chip" style="--c: var(--build)">P4 Low</span></td><td>8 or more permission asks.</td><td>Workflow</td><td><span class="chip" style="--c: var(--safety)">Safety line</span></td><td>Next prompt</td></tr></tbody></table></div>
+      <h3>How the models rank their advice</h3>
+      <blockquote>Set priority for each item: 1 critical (causing failures, data risk or wasted work right now), 2 high (costs tokens or quality in every session), 3 medium (a clear improvement), 4 low (nice to have). Set category to the one that fits best: safety, cost (tokens and plan usage), quality (correctness and verification), context (context window and prompts), workflow (process and delegation), git, or setup (CLAUDE.md, settings, agents, skills, MCP). Set stage to the playbook station the advice belongs to: start (how a project or task is framed in its first prompt), setup (rules, agents, hooks, skills), plan (spec, done-when, plan mode), build (delegation, parallel sessions, editing), verify (tests, review, evals), ship (branches, commits, PRs), learn (turning mistakes into rules, skills and evals), context (context window, cost and plan usage, always on) or safety (destructive actions, secrets, permissions, always on).</blockquote>
+      <h3>How the list is ordered</h3>
+      <ul class="facts">
+        <li>Rule tips and expert suggestions share one list, sorted P1 first.</li>
+        <li>At the same priority, rule tips come before expert suggestions, each in the order found.</li>
+        <li>The turn judge (<code>claude-haiku-5-5</code>) writes the Now box after each turn. Its verdict is not a recommendation, but a stuck or drifting verdict comes with the next prompt to send.</li>
+      </ul>
+  </section>
+
+  <footer>
+    <span>Written by session-coach on 2026-11-02. Post titles come from public feeds; pasted posts appear here too, so check them before you share this file.</span>
+    <span>The prompt limit is 24,000 characters. The <a href="playbook-line-map.html">line map</a> shows the same playbook by station, and the <a href="session-coach-guide.html">guide</a> shows how to use the coach.</span>
+  </footer>
+</div>
+</body>
+</html>

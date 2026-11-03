@@ -1,12 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteRequest, ModelCompleteResult, PluginOptions, Register, RenderChildren, RenderSurface } from 'claude-code'
 
-import type { ApplyState, CoachJob, FeedStatus, Fix, Insight, Metrics, Playbook, SetupAudit, SetupRecommendation, Tip, UsageWindow } from '../types'
+import type { ApplyState, CoachJob, FeedStatus, Fix, Insight, Metrics, Playbook, PlaybookTrail, SetupAudit, SetupRecommendation, Tip, UsageWindow } from '../types'
 import { comparePrompt, parseInsights, playbookText, reportMarkdown } from './coach'
 import type { HistoryEntry } from './coach'
-import { SEED_PLAYBOOK, collectPosts, mergePosts, parsePlaybook, pastedPosts, playbookPrompt, splitList } from './feed'
+import { SEED_PLAYBOOK, buildTrail, collectPosts, mergePosts, parsePlaybook, pastedPosts, playbookPrompt, splitList } from './feed'
 import type { FetchText } from './feed'
-import { MAP_FILE, renderPlaybookMap } from './map'
+import { GUIDE_FILE, MAP_FILE, TRANSPARENCY_FILE, renderPlaybookMap } from './map'
+import { renderTransparency } from './transparency'
 import { VERDICT_COLOR, VERDICT_GLYPH, VERDICT_LABEL, judgePrompt, parseJudgment, sparkline, turnDelta } from './judge'
 import { auditPrompt, fingerprint, mcpServerNames, measure, parseAgentFile, parseRecommendations, recommendationCard, snapshotText, summarizeSettings } from './setup'
 import type { AgentDef, InstructionFile, SettingsSummary, SetupSnapshot } from './setup'
@@ -56,6 +57,7 @@ const gitRef = atom({ plugin: 'session-coach', key: 'git' } as const, null)
 const lastActionRef = atom({ plugin: 'session-coach', key: 'lastAction' } as const, null)
 const isWorkingRef = atom({ plugin: 'session-coach', key: 'isWorking' } as const, false)
 const mapPathRef = atom({ plugin: 'session-coach', key: 'mapPath' } as const, '')
+const transparencyPathRef = atom({ plugin: 'session-coach', key: 'transparencyPath' } as const, '')
 
 type Config = {
   profile: string
@@ -91,6 +93,9 @@ const readConfig = (options: PluginOptions): Config => ({
 
 const loadPlaybook = async ($: EngineInterface): Promise<Playbook> =>
   ((await $.store.get('playbook')) as Playbook | undefined) ?? SEED_PLAYBOOK
+
+const loadTrail = async ($: EngineInterface): Promise<PlaybookTrail | null> =>
+  ((await $.store.get('playbookTrail')) as PlaybookTrail | undefined) ?? null
 
 const loadStrings = async ($: EngineInterface, key: string): Promise<string[]> => {
   const value = await $.store.get(key)
@@ -200,10 +205,11 @@ const rebuildPlaybook = async ($: EngineInterface, isForced: boolean): Promise<s
   await setFeed($, { state: 'fetching', message: 'Fetching posts...', fetchedAt: playbook.fetchedAt, postCount: playbook.postCount })
   const fetchText: FetchText = (url, headers) => $.http.fetch(url, { headers })
   const webPosts = await collectPosts(fetchText, { ...config, pasted: [] })
-  const posts = mergePosts(webPosts, pastedPosts(await loadStrings($, 'pasted'), now))
+  const pasted = pastedPosts(await loadStrings($, 'pasted'), now)
+  const posts = mergePosts(webPosts, pasted)
   if (posts.length === 0) {
     const message = 'No posts reached: the web feeds were blocked. Paste posts with /coach paste.'
-    await setFeed($, { state: 'failed', message, fetchedAt: playbook.fetchedAt, postCount: playbook.postCount })
+    await failRefresh($, playbook, message)
     return message
   }
 
@@ -217,15 +223,26 @@ const rebuildPlaybook = async ($: EngineInterface, isForced: boolean): Promise<s
   const built = reply.isAnswered ? parsePlaybook(reply.text, posts, now) : undefined
   if (built === undefined) {
     const message = reply.isAnswered ? 'The model reply was not a playbook.' : `Model call failed: ${reply.reason}.`
-    await setFeed($, { state: 'failed', message, fetchedAt: playbook.fetchedAt, postCount: playbook.postCount })
+    await failRefresh($, playbook, message)
     return message
   }
 
+  const trail = buildTrail({ ...config, pasted: [] }, [...webPosts, ...pasted], posts, now, config.playbookModel)
   await $.store.set('playbook', built)
+  await $.store.set('playbookTrail', trail)
   await writeMap($, built)
   const message = `Playbook rebuilt from ${built.postCount} posts across ${built.sources.length} sources.`
-  await setFeed($, { state: 'ok', message, fetchedAt: built.fetchedAt, postCount: built.postCount })
+  const feed: FeedStatus = { state: 'ok', message, fetchedAt: built.fetchedAt, postCount: built.postCount }
+  await setFeed($, feed)
+  await writeTransparency($, built, trail, feed)
   return message
+}
+
+// A failed refresh keeps the last playbook, and the transparency page says the refresh failed.
+const failRefresh = async ($: EngineInterface, playbook: Playbook, message: string): Promise<void> => {
+  const feed: FeedStatus = { state: 'failed', message, fetchedAt: playbook.fetchedAt, postCount: playbook.postCount }
+  await setFeed($, feed)
+  await writeTransparency($, playbook, await loadTrail($), feed)
 }
 
 const noteAnalysis = async ($: EngineInterface, note: string, isFailure: boolean): Promise<void> => {
@@ -307,9 +324,19 @@ type SkippedRecord = { fingerprint: string; ids: string[] }
 const homeDir = async ($: EngineInterface): Promise<string> =>
   ((await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? '').replace(/[\\/]+$/, '')
 
+// The map and the transparency page link to the guide, so a copy of the shipped guide sits beside them.
+const copyGuide = async ($: EngineInterface, home: string): Promise<void> => {
+  try {
+    await $.fs.write(`${home}/.claude/session-coach/${GUIDE_FILE}`, await $.fs.read(`${$.plugin.root}/docs/${GUIDE_FILE}`))
+  } catch (error) {
+    $.ui.log(`session-coach: could not copy the guide: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 const writeMap = async ($: EngineInterface, playbook: Playbook): Promise<string | undefined> => {
   const home = await homeDir($)
   if (!home) return undefined
+  await copyGuide($, home)
   const path = `${home}/.claude/session-coach/${MAP_FILE}`
   try {
     await $.fs.write(path, renderPlaybookMap(playbook))
@@ -319,6 +346,31 @@ const writeMap = async ($: EngineInterface, playbook: Playbook): Promise<string 
   }
   await update($, mapPathRef, () => path)
   await $.store.set('mapPath', path)
+  return path
+}
+
+const writeTransparency = async ($: EngineInterface, playbook: Playbook, trail: PlaybookTrail | null, feed: FeedStatus | null): Promise<string | undefined> => {
+  const home = await homeDir($)
+  if (!home) return undefined
+  await copyGuide($, home)
+  const path = `${home}/.claude/session-coach/${TRANSPARENCY_FILE}`
+  const page = renderTransparency({
+    playbook,
+    trail,
+    feed,
+    analysisModel: config.analysisModel,
+    judgeModel: config.judgeModel,
+    analyzeEvery: config.analyzeEvery,
+    generatedAt: await $.clock.now(),
+  })
+  try {
+    await $.fs.write(path, page)
+  } catch (error) {
+    $.ui.log(`session-coach: could not write the transparency page to ${path}: ${error instanceof Error ? error.message : String(error)}`)
+    return undefined
+  }
+  await update($, transparencyPathRef, () => path)
+  await $.store.set('transparencyPath', path)
   return path
 }
 
@@ -573,8 +625,8 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: COMMAND,
-      description: 'Session coach: live score and suggestions. Args: analyze, refresh, setup [refresh], paste <post>, report, map, hide, show',
-      argumentHint: '[analyze|refresh|setup|paste <post>|report|map|hide|show]',
+      description: 'Session coach: live score and suggestions. Args: analyze, refresh, setup [refresh], paste <post>, report, map, transparency, hide, show',
+      argumentHint: '[analyze|refresh|setup|paste <post>|report|map|transparency|hide|show]',
     })
     if ((await read($, metricsRef)) === null) {
       const now = await $.clock.now()
@@ -584,6 +636,8 @@ export const register: Register = (on, options) => {
     await update($, analysisNoteRef, () => '')
     const mapPath = await $.store.get('mapPath')
     if (typeof mapPath === 'string') await update($, mapPathRef, () => mapPath)
+    const transparencyPath = await $.store.get('transparencyPath')
+    if (typeof transparencyPath === 'string') await update($, transparencyPathRef, () => transparencyPath)
     if (config.openPane === 'auto') void $.ui.open({ id: PANE, title: 'Session coach' })
     $.clock.after(3000, () => void refreshFeed($, false))
     await update($, auditingRef, () => false)
@@ -730,6 +784,10 @@ export const register: Register = (on, options) => {
         const path = await writeMap($, await loadPlaybook($))
         return { text: path ? `Playbook map written to ${path}. Open it in a browser.` : 'Could not write the playbook map to ~/.claude/session-coach.' }
       }
+      case 'transparency': {
+        const path = await writeTransparency($, await loadPlaybook($), await loadTrail($), await read($, feedRef))
+        return { text: path ? `Transparency page written to ${path}. Open it in a browser.` : 'Could not write the transparency page to ~/.claude/session-coach.' }
+      }
       case 'hide':
         await update($, bandHiddenRef, () => true)
         return { text: 'Coach band hidden. /coach show brings it back.' }
@@ -737,7 +795,7 @@ export const register: Register = (on, options) => {
         await update($, bandHiddenRef, () => false)
         return { text: 'Coach band shown.' }
       default:
-        return { text: `Unknown: ${[verb, ...rest].join(' ')}. Use analyze, refresh, setup [refresh], paste <post>, report, map, hide or show.` }
+        return { text: `Unknown: ${[verb, ...rest].join(' ')}. Use analyze, refresh, setup [refresh], paste <post>, report, map, transparency, hide or show.` }
     }
   })
 
@@ -782,6 +840,7 @@ export const register: Register = (on, options) => {
     const insights = await read($, insightsRef)
     const feed = await read($, feedRef)
     const mapPath = await read($, mapPathRef)
+    const transparencyPath = await read($, transparencyPathRef)
     const isAnalyzing = await read($, analyzingRef)
     const analysisNote = await read($, analysisNoteRef)
     const judgments = await read($, judgmentsRef)
@@ -902,6 +961,10 @@ export const register: Register = (on, options) => {
               `Playbook map: [Agent Playbook Line Map](${config.playbookUrl}). Every recommendation links to its station.`,
               '',
               mapPath ? `Open local map: \`${mapPath}\` (rebuilt with the playbook; /coach map writes it now).` : 'Open local map: not written yet. Run /coach map.',
+              '',
+              transparencyPath
+                ? `How the advice was built: \`${transparencyPath}\` (rewritten on every feed refresh; /coach transparency writes it now).`
+                : 'How the advice was built: not written yet. Press Refresh feed or run /coach transparency.',
             ].join('\n')}
           />,
         ])}

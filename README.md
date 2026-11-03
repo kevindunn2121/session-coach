@@ -11,6 +11,7 @@ A Claude Code plugin that coaches you while you work with Claude. It scores each
 - [Turn judge and expert analysis](#turn-judge-and-expert-analysis)
 - [Setup audit](#setup-audit)
 - [Expert playbook and line map](#expert-playbook-and-line-map)
+- [Transparency page](#transparency-page)
 - [Commands](#commands)
 - [Options](#options)
 - [Models and cost](#models-and-cost)
@@ -63,7 +64,7 @@ When a session starts, the pane opens. It has these sections, each in its own co
 | Recommendations | Rule tips and expert suggestions in one list, most important first. |
 | Vitals | Plan usage, cache hit rate, context runway, git state, permission asks, file churn and the coach's own cost. |
 | Score | The five score parts as bars, with turn and tool counts. |
-| Setup & feed | Open setup recommendations, the feed status and links to the playbook line map. |
+| Setup & feed | Open setup recommendations, the feed status, and links to the playbook line map and the transparency page. |
 
 A band above the prompt shows the score, the verdict, plan usage from 60% and the top recommendation with its priority. Details opens the pane. Hide hides the band.
 
@@ -186,6 +187,18 @@ The map exists in three places:
 | [`docs/playbook-line-map.html`](docs/playbook-line-map.html) | A snapshot, updated by hand. |
 | The published artifact at the `playbookUrl` link | A snapshot, updated by hand. Every recommendation links here. |
 
+## Transparency page
+
+The transparency page shows how the coach came to its advice. Every feed refresh writes it again to `~/.claude/session-coach/playbook-transparency.html`, including a refresh that fails, and `/coach transparency` writes it now. It has five steps:
+
+1. Read: every source the coach tried, with the posts each one gave, kept after duplicates were removed, and sent to the model. A source that gave nothing says so, and X accounts with no mirror are listed as not read.
+2. Rank: the ranking formula, `(1 + log2(1 + score)) × recency`, and the recency rules.
+3. Cut: how much of the 24,000-character limit the posts used, and each post the model saw, numbered as in its prompt, with its link, age, score, recency weight and rank.
+4. Distill: each practice and tool with the post numbers that back it. The playbook model cites them, and a number that names no post it saw is dropped. An item with no citation is marked as the model's own synthesis.
+5. Recommend: the three lanes that turn the playbook into advice (rule tips, expert suggestions and the setup audit), every built-in rule with its trigger, priority, category, station and fix timing, the ranking rules the models follow, and how the list is ordered.
+
+Post titles come from public feeds. Pasted posts appear on the page too, so check them before you share the file. [`docs/playbook-transparency.html`](docs/playbook-transparency.html) is a snapshot from the built-in seed playbook, updated by hand.
+
 ## Commands
 
 | Command | What it does |
@@ -197,6 +210,7 @@ The map exists in three places:
 | `/coach setup` | Open the setup audit. Add `refresh` to run a new audit. |
 | `/coach report` | Print the session report in the chat, where you can select and copy it. |
 | `/coach map` | Write the line map from the current playbook and print its path. |
+| `/coach transparency` | Write the transparency page from the current playbook and print its path. |
 | `/coach hide` and `/coach show` | Hide or show the band. |
 
 ## Options
@@ -259,9 +273,12 @@ The coach works in the Claude desktop app, with these differences from a termina
 | `hooks/fix.ts` | Fix kinds, timings and their text. |
 | `hooks/rank.ts` | Priorities, categories, stations and ranking. |
 | `hooks/map.ts` | The line map renderer. |
+| `hooks/transparency.ts` | The transparency page renderer. |
 | `types/index.d.ts` | Shared types and the plugin state contract. |
 | `tests/` | Tests for `claude plugin test`. |
 | `docs/playbook-line-map.html` | The published line map snapshot. |
+| `docs/playbook-transparency.html` | A transparency page snapshot, from the built-in seed playbook. |
+| `docs/session-coach-guide.html` | A how-to guide for using the coach. |
 | `CLAUDE.md` | Notes for agents that work on this repository. |
 | `CHANGELOG.md` | Changes by release. |
 

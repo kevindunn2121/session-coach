@@ -1,7 +1,9 @@
 import type { Playbook, Practice, Stage, ToolIdea } from '../types'
 import { STAGES } from './rank'
 
-export const MAP_FILE = 'playbook-line-map.html'
+import { GUIDE_FILE, MAP_FILE, NAV_STYLE, TRANSPARENCY_FILE, siteNav } from './nav'
+
+export { GUIDE_FILE, MAP_FILE, TRANSPARENCY_FILE }
 
 type Station = { stage: Stage; number: number; name: string; title: string; lede: string; watches: string[] }
 
@@ -86,9 +88,9 @@ const STAGE_KEYWORDS: readonly [Stage, RegExp][] = [
 export const stageOf = (item: { stage?: Stage }, text: string): Stage =>
   item.stage !== undefined && STAGES.includes(item.stage) ? item.stage : (STAGE_KEYWORDS.find(([, pattern]) => pattern.test(text))?.[0] ?? 'build')
 
-const practiceStage = (practice: Practice): Stage => stageOf(practice, `${practice.practice} ${practice.why}`)
+export const practiceStage = (practice: Practice): Stage => stageOf(practice, `${practice.practice} ${practice.why}`)
 
-const toolStage = (tool: ToolIdea): Stage => stageOf(tool, `${tool.kind} ${tool.name} ${tool.what}`)
+export const toolStage = (tool: ToolIdea): Stage => stageOf(tool, `${tool.kind} ${tool.name} ${tool.what}`)
 
 const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
 
@@ -139,7 +141,7 @@ const railSection = (rail: Rail, practices: Practice[], tools: ToolIdea[]): stri
     </section>`
 }
 
-const builtOn = (playbook: Playbook): string => (playbook.fetchedAt > 0 ? new Date(playbook.fetchedAt).toISOString().slice(0, 10) : 'built-in seed')
+export const builtOn = (playbook: Playbook): string => (playbook.fetchedAt > 0 ? new Date(playbook.fetchedAt).toISOString().slice(0, 10) : 'built-in seed')
 
 /** The Agent Playbook Line Map as a standalone HTML page, filled from the playbook. */
 export const renderPlaybookMap = (playbook: Playbook): string => {
@@ -149,7 +151,7 @@ export const renderPlaybookMap = (playbook: Playbook): string => {
   const sources = playbook.sources.length > 0 ? playbook.sources.join(', ') : 'none'
 
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -157,9 +159,10 @@ export const renderPlaybookMap = (playbook: Playbook): string => {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
-<style>${STYLE}</style>
+<style>${MAP_STYLE}${NAV_STYLE}</style>
 </head>
 <body>
+${siteNav('map')}
 <div class="wrap">
   <header>
     <span class="eyebrow">Session coach · expert playbook · line map</span>
@@ -189,6 +192,8 @@ ${STATIONS.map(station => stationSection(station, practicesOn(station.stage), to
   <footer>
     <span>Sources: ${escapeHtml(sources)}.</span>
     <span>Practices are summarized from the session coach playbook built on ${escapeHtml(date)}. The coach rebuilds the playbook daily and writes this page again each time.</span>
+    <span><a href="${TRANSPARENCY_FILE}">How this playbook was built</a>: the sources, ranking and posts behind each practice.</span>
+    <span><a href="${GUIDE_FILE}">How to use session-coach</a>: install, the pane, fixes and commands.</span>
   </footer>
 </div>
 <script>${SCRIPT}</script>
@@ -197,7 +202,7 @@ ${STATIONS.map(station => stationSection(station, practicesOn(station.stage), to
 `
 }
 
-const STYLE = `
+export const MAP_STYLE = `
 /* Layout: a transit-line map of one project's life. Seven stations in order, two lines (context & cost, safety) running the whole length. */
 :root {
   --paper: #eef1f4;
@@ -235,6 +240,8 @@ const STYLE = `
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+body { margin: 0; }
+body > .site-nav:first-child { margin: -28px calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 28px calc(-1 * max(16px, env(safe-area-inset-left, 0px))); }
 body {
   background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));

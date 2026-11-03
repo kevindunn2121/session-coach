@@ -129,9 +129,10 @@ test('a playbook rebuild writes the line map and the pane shows its path', { opt
   const refreshed = await $.command.run({ command: 'coach', args: 'refresh' } as never)
   expect(refreshed.text).toBe('Playbook rebuilt from 1 posts across 1 sources.')
 
-  const [written] = writes
-  expect(writes.length).toBe(1)
+  const written = writes.find(write => write.path.endsWith('playbook-line-map.html'))
+  expect(writes.map(write => write.path)).toEqual(['/Users/kevin/.claude/session-coach/playbook-line-map.html', '/Users/kevin/.claude/session-coach/playbook-transparency.html'])
   expect(written?.path).toBe('/Users/kevin/.claude/session-coach/playbook-line-map.html')
+  expect(written?.text).toContain('href="playbook-transparency.html"')
   expect(sectionOf(written?.text ?? '', 'context')).toContain('Keep context &lt;small&gt;')
 
   const ui = await $.ui.mount(pane)
@@ -139,7 +140,7 @@ test('a playbook rebuild writes the line map and the pane shows its path', { opt
   await ui.unmount()
 })
 
-test('a failed rebuild does not write the map', { options: { analyzeEvery: 0, judgeTurns: false, ...ONE_FEED } }, async ($, on) => {
+test('a failed rebuild keeps the map and says so on the transparency page', { options: { analyzeEvery: 0, judgeTurns: false, ...ONE_FEED } }, async ($, on) => {
   mock.store(on)
   mock.clock(on, { now: Date.parse('2026-10-27T08:00:00Z') })
   mock.env(on, { HOME: '/Users/kevin' })
@@ -149,7 +150,8 @@ test('a failed rebuild does not write the map', { options: { analyzeEvery: 0, ju
 
   const refreshed = await $.command.run({ command: 'coach', args: 'refresh' } as never)
   expect(refreshed.text).toBe('The model reply was not a playbook.')
-  expect(writes).toEqual([])
+  expect(writes.map(write => write.path)).toEqual(['/Users/kevin/.claude/session-coach/playbook-transparency.html'])
+  expect(writes[0]?.text).toContain('Last refresh failed:</b> The model reply was not a playbook.')
 })
 
 test('/coach map writes the map on demand and prints the path', async ($, on) => {

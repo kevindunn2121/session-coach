@@ -315,6 +315,34 @@ const TIP_RANK: Record<string, TipRank> = {
   asks: [4, 'workflow', 'safety'],
 }
 
+// What makes each rule tip fire, in words, for the transparency page. Keep it in step with `tips` below.
+const TIP_TRIGGER: Record<string, string> = {
+  context: 'The context window is 75% full or more.',
+  loop: 'The same command fails more than once.',
+  verify: '5 or more edits since the last test, lint or type check.',
+  rework: '2 or more correction prompts.',
+  blind: '2 or more edits to files Claude did not read this session.',
+  vague: 'More than 40% of prompts are short with no file or goal, from the third prompt on.',
+  plan: 'More than 15 edits with no plan mode.',
+  delegate: '40 or more tool calls with no subagent.',
+  cache: 'Prompt cache hit rate under 50% after 5 turns.',
+  runway: '3 or fewer turns left before auto-compaction.',
+  churn: `One file edited ${CHURN_EDITS} or more times.`,
+  asks: `${PERMISSION_ASKS} or more permission asks.`,
+}
+
+/** One built-in rule: what fires it, how it ranks, and when its fix should go in. */
+export type RuleEntry = { id: string; trigger: string; when: FixWhen; priority: Priority; category: Category; stage: Stage }
+
+export const RULE_CATALOG: readonly RuleEntry[] = Object.entries(TIP_RANK).map(([id, [priority, category, stage]]) => ({
+  id,
+  trigger: TIP_TRIGGER[id] ?? '',
+  when: TIP_WHEN[id] ?? 'next',
+  priority,
+  category,
+  stage,
+}))
+
 export const finishTip = (tip: TipDraft, when: FixWhen | undefined, [priority, category, stage]: TipRank): Tip => ({
   ...tip,
   fix: when === undefined || tip.fix.when ? tip.fix : { ...tip.fix, when },
