@@ -36,6 +36,14 @@ test('every rule tip carries an exact fix', async () => {
   expect(found.find(t => t.id === 'verify')?.permanent?.kind).toBe('claude-md')
 })
 
+test('the delegate tip offers a CLAUDE.md line', async () => {
+  let m = emptyMetrics(0)
+  for (let i = 0; i < 40; i++) m = recordTool(m, { tool: 'Read', input: { file_path: `f${i}.ts` }, isError: false, isDenied: false })
+  const delegate = tips(m).find(t => t.id === 'delegate')
+  expect(delegate?.permanent?.kind).toBe('claude-md')
+  expect(delegate?.permanent?.text).toBe('- Delegate codebase searches and broad file reads to a subagent and keep only its summary in the main context.')
+})
+
 test('model suggestions and setup cards keep their fixes', async () => {
   const insights = parseInsights('{"insights":[{"kind":"hook","title":"Lint on edit","detail":"d","fix":{"kind":"settings","target":"~/.claude/settings.json","text":"{\\"hooks\\":{}}","then":"Start a new session."}}]}')
   expect(insights[0]?.fix).toEqual({ kind: 'settings', target: '~/.claude/settings.json', text: '{"hooks":{}}', then: 'Start a new session.' })
