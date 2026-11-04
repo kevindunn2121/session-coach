@@ -2,6 +2,12 @@
 
 All changes to session-coach, newest first. Pull request numbers up to #5 refer to the earlier repository `Nterlace-Solutions/session-coach`.
 
+## 0.8.0 (2026-11-04)
+
+- Setup audit cards fix in one click. **Fix** applies a recommendation's patch itself: it saves a backup to `~/.claude/session-coach/backups/`, writes the file, and shows the diff and when the change takes effect. **Undo** puts the file back, unless you edited the file after the fix. When the change is already there, Fix writes nothing.
+- **Fix with Claude** replaces Apply and Send to Claude. It sends the instruction as your next prompt in one click, without the prompt box, for hooks, allow rules and every change the plugin does not make itself. When Fix cannot write a file, the card says why and offers Fix with Claude.
+- Patches keep each file's line ending and final newline. Before, a file without a final newline gained one.
+
 ## 0.7.4 (2026-11-04)
 
 - The tip for a long session with no subagents now also offers a line for `~/.claude/CLAUDE.md`: delegate codebase searches and broad file reads to a subagent and keep only its summary in the main context.

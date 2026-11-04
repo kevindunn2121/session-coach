@@ -625,10 +625,10 @@ ol.steps > li.lit::before{background:var(--orange)}
         <p class="eyebrow">Task 02</p>
         <h2>Run the first setup audit</h2>
         <div class="task flip">
-          <div class="schematic" role="img" aria-label="Schematic of the setup audit pane: recommendation cards sorted by priority, each with Apply and Skip">
+          <div class="schematic" role="img" aria-label="Schematic of the setup audit pane: recommendation cards sorted by priority, each with Fix, Undo and Skip">
             <div class="sc-top"><span>Setup audit</span><span class="pill bad">P1</span></div>
             <div class="sc-side"><span class="sc-el">CLAUDE.md</span><span class="sc-el">settings.json</span><span class="sc-el">Skills · MCP</span></div>
-            <div class="sc-main"><span class="sc-el hot">Add a PreToolUse guard hook</span><span class="sc-el">Evidence · change · effect</span><span class="sc-el lav">Apply · Skip</span></div>
+            <div class="sc-main"><span class="sc-el hot">Add a PreToolUse guard hook</span><span class="sc-el">Evidence · change · effect</span><span class="sc-el lav">Fix · Undo · Skip</span></div>
             <span class="callout" style="left:10%;top:66%">1</span>
             <span class="callout" style="left:92%;top:30%">2</span>
             <span class="callout" style="left:92%;top:72%">3</span>
@@ -637,7 +637,7 @@ ol.steps > li.lit::before{background:var(--orange)}
             <li><h4>Start any session</h4><p>The audit runs 8 seconds in. No prompt needed.</p>
               <details class="more"><summary>what it reads</summary><div class="body">Your CLAUDE.md files, both settings.json files (environment variable names, never values), your skills, agents, plugins and MCP server names, and the names of stack files such as dbt_project.yml, snowflake.yml and .github/workflows.</div></details></li>
             <li><h4>Read the cards</h4><p>Sorted P1 first, judged for your Snowflake, Azure and GitHub stack.</p></li>
-            <li><h4>Apply or skip</h4><p>Apply fills your prompt box. Review, then <kbd>Enter</kbd>.</p></li>
+            <li><h4>Fix or skip</h4><p>Fix changes the file in one click and shows the diff, with Undo. Fix with Claude sends the rest to Claude.</p></li>
           </ol>
         </div>
         <div class="note tip"><svg class="ico"><use href="#i-refresh"/></svg><b>Rerun</b><p><code>/coach setup refresh</code> audits now.</p></div>
@@ -711,8 +711,8 @@ ol.steps > li.lit::before{background:var(--orange)}
         <p class="eyebrow">Ground rules</p>
         <h2>Do and don't</h2>
         <div class="dodont">
-          <div class="do"><p class="eyebrow">Do</p><ul><li>Fix P1 cards first</li><li>Review Apply before Enter</li><li>Set your profile once</li><li>Follow the fix timing</li></ul></div>
-          <div class="dont"><p class="eyebrow">Don't</p><ul><li>Ignore a stuck verdict</li><li>Apply cards unread</li><li>Steer mid-turn on Stop first</li><li>Skip P1 safety cards</li></ul></div>
+          <div class="do"><p class="eyebrow">Do</p><ul><li>Fix P1 cards first</li><li>Read the diff after Fix</li><li>Set your profile once</li><li>Follow the fix timing</li></ul></div>
+          <div class="dont"><p class="eyebrow">Don't</p><ul><li>Ignore a stuck verdict</li><li>Fix cards unread</li><li>Steer mid-turn on Stop first</li><li>Skip P1 safety cards</li></ul></div>
         </div>
       </section>
 

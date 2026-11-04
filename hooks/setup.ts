@@ -1,4 +1,4 @@
-import type { ApplyState, Drift, Metrics, SetupRecommendation } from '../types'
+import type { AppliedPatch, ApplyState, Drift, Metrics, Patch, SetupRecommendation } from '../types'
 
 import { PATCH_RULES, PATCH_SCHEMA, parsePatch } from './apply'
 import { extractJson } from './feed'
@@ -202,20 +202,43 @@ const DRIFT_LABEL: Record<Drift, string> = { less: '↓ less', same: '→ same',
 
 const cell = (text: string): string => text.replace(/\|/g, '/').replace(/\s+/g, ' ')
 
-export const APPLY_NOTE: Record<ApplyState, string> = {
-  filling: 'Putting the instruction in your prompt box…',
-  filled: '✓ The instruction is in your prompt box. Review it, then press Enter.',
-  refused: "This app's prompt box can't be filled by a plugin. Press **Send to Claude** to run the instruction as your next prompt, or **Copy** it.",
-  sent: '✓ Sent to Claude as your next prompt. It runs when the current turn finishes, and Claude asks before editing any file.',
-  copied: '✓ Copied. Paste it into the prompt box and press Enter.',
-  'copy-failed': "Copy isn't available in this app either. Press **Send to Claude**, or select the instruction below and copy it.",
+const TAKES_EFFECT: Record<Patch['kind'], string> = {
+  'claude-md-append': 'Start a new session, or run /clear, for Claude to read it.',
+  'settings-merge': 'It takes effect in your next session.',
 }
 
-export const recommendationCard = (rec: SetupRecommendation, state?: ApplyState): string =>
+export const applyNote = (rec: SetupRecommendation, state: ApplyState, applied?: AppliedPatch): string => {
+  const path = applied?.path ? `\`${applied.path}\`` : 'the file'
+  switch (state) {
+    case 'applied':
+      return [`✓ Changed ${path}.`, rec.patch ? TAKES_EFFECT[rec.patch.kind] : '', '**Undo** puts the file back.'].filter(Boolean).join(' ')
+    case 'already':
+      return `✓ ${path} already has this change. Nothing was written.`
+    case 'undone':
+      return `↩ Undone. ${path} is back as it was.`
+    case 'undo-blocked':
+      return `${path} changed after the fix, so Undo left it alone.${applied?.backup ? ` The file before the fix is saved at \`${applied.backup}\`.` : ''}`
+    case 'apply-failed':
+      return `The plugin could not make this change itself${applied?.reason ? `: ${applied.reason.replace(/[.!?]?$/, '.')}` : '.'} Press **Fix with Claude** instead.`
+    case 'sent':
+      return '✓ Sent to Claude as your next prompt. It runs when the current turn finishes, and Claude asks before editing any file.'
+    case 'filled':
+      return "This app does not let plugins copy, so the instruction is in your prompt box. Select it there and copy it, or press Enter to send it."
+    case 'copied':
+      return '✓ Copied. Paste it into the prompt box and press Enter.'
+    case 'copy-failed':
+      return "Copy isn't available in this app. Press **Fix with Claude**, or select the instruction below and copy it."
+  }
+}
+
+const SHOWS_INSTRUCTION: readonly ApplyState[] = ['apply-failed', 'sent', 'filled', 'copied', 'copy-failed']
+
+export const recommendationCard = (rec: SetupRecommendation, state?: ApplyState, applied?: AppliedPatch): string =>
   [
     `### ${rec.title}`,
     `_Area: ${rec.area}_`,
-    ...(state ? ['', `> ${APPLY_NOTE[state]}`] : []),
+    ...(state ? ['', `> ${applyNote(rec, state, applied)}`] : []),
+    ...(state === 'applied' && applied?.diff ? ['', '```diff', applied.diff, '```'] : []),
     '',
     rec.problem,
     '',
@@ -227,7 +250,7 @@ export const recommendationCard = (rec: SetupRecommendation, state?: ApplyState)
     '| --- | --- | --- | --- |',
     `| If you apply | ${DRIFT_LABEL[rec.ifApplied.drift]} | ${cell(rec.ifApplied.tokens)} | ${cell(rec.ifApplied.summary)} |`,
     `| If you skip | ${DRIFT_LABEL[rec.ifSkipped.drift]} | ${cell(rec.ifSkipped.tokens)} | ${cell(rec.ifSkipped.summary)} |`,
-    ...(state ? ['', '**Instruction:**', '', '```text', rec.applyPrompt, '```'] : []),
+    ...(state && SHOWS_INSTRUCTION.includes(state) ? ['', '**Instruction:**', '', '```text', rec.applyPrompt, '```'] : []),
   ].join('\n')
 
 const asString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
