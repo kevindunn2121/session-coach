@@ -412,6 +412,7 @@ export const tips = (m: Metrics): Tip[] => {
       id: 'delegate',
       text: 'Long session with no subagents. Searches and reads fill the main context.',
       fix: { kind: 'prompt', text: 'Use the scout agent for the next searches and file reads, and give me only its summary.' },
+      permanent: { kind: 'claude-md', text: '- Delegate codebase searches and broad file reads to a subagent and keep only its summary in the main context.' },
     })
   }
   const hitRate = cacheHitRate(m)
