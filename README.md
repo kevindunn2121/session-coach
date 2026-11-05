@@ -104,7 +104,8 @@ Each fix also has a timing, because Claude can be in the middle of a turn:
 
 | Timing | When |
 | --- | --- |
-| Side question | Now. It goes in as `/btw`, so Claude answers without changing its task. |
+| Side question | Now. It goes in as `/btw`, so Claude answers without changing its task. `/btw` answers only from the conversation so far: it cannot read files or run commands. |
+| On the side | Now. Claude hands the work to a background subagent and keeps working on its task. The expert analysis picks this for read-only work, such as a review, a check, a test run or a search. |
 | Steer now | Now. Press Enter, and Claude reads it before its next step. |
 | Next prompt | After Claude finishes the current turn. |
 | Stop first | Press Esc to stop Claude, then send it, because continuing wastes work. |
@@ -115,7 +116,7 @@ The buttons on each fix:
 1. Fix makes the change in one click, the same way as on a setup audit card. The "To make it stick" lines of the verify, unread-file, plan and subagent tips have it, and so does an expert suggestion when the analysis model returns a patch the plugin can write itself. The plugin saves a backup to `~/.claude/session-coach/backups/` first, and the card shows the diff.
 2. Undo puts the file back, unless you edited it after the fix. When the tip stops showing, the fix moves to **Earlier fixes you can undo** at the bottom of the recommendations, so Undo stays.
 3. Fix with Claude sends the fix to Claude as your prompt, in one click and without the prompt box. Fixes without a patch have it, except steps you do by hand. A fix with a patch has it only when the plugin cannot write the file.
-4. Put in prompt puts the fix in your prompt box, so you can edit it first, and the status line says what to press, based on whether Claude is working.
+4. Put in prompt puts the fix in your prompt box, so you can edit it first, and the status line says what to press, based on whether Claude is working. On an "On the side" fix, this button is called **Run on the side**. It adds the instruction to run the fix in a background subagent, and the card has no Fix with Claude, so you read the fix before you send it.
 5. Copy copies the fix. In the desktop app, Copy puts the text in the prompt box instead (see [Desktop app notes](#desktop-app-notes)).
 
 The plugin keeps a record of each fix in its store, so Undo still works after a plugin reload or in a new session.

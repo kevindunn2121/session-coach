@@ -1,10 +1,10 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { parseInsights } from '../hooks/coach'
-import { fixCopyText, fixMarkdown, fixPromptText, parseFix, promptedMessage } from '../hooks/fix'
+import { comparePrompt, parseInsights } from '../hooks/coach'
+import { SIDE_LEAD, fixCopyText, fixMarkdown, fixPromptText, parseFix, promptedMessage, whenOf } from '../hooks/fix'
 import { parseJudgment } from '../hooks/judge'
-import { emptyMetrics, recordTool, tips } from '../hooks/metrics'
+import { emptyMetrics, recordTool, score, tips } from '../hooks/metrics'
 import { parseRecommendations } from '../hooks/setup'
 
 const USAGE = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
@@ -135,5 +135,73 @@ test('Put in prompt while Claude is working tells you to press Esc for a stop-fi
   await ui.press({ key: 'tip-loop-fill' })
   expect(filled.at(-1)).toContain('Stop retrying.')
   expect((await ui.find({ key: 'status' }))?.text).toContain('Press Esc to stop Claude, then press Enter to send it.')
+  await ui.unmount()
+})
+
+test('a side fix runs in a background subagent while Claude keeps working', async () => {
+  const side = parseFix({ kind: 'prompt', text: 'Review src/auth.ts for missing null checks.', when: 'side' })!
+  expect(whenOf(side)).toBe('side')
+  expect(fixPromptText(side)).toBe(`${SIDE_LEAD}\n\nReview src/auth.ts for missing null checks.`)
+  expect(fixPromptText({ ...side, text: fixPromptText(side) })).toBe(fixPromptText(side))
+  const card = fixMarkdown(side)
+  expect(card).toContain('Run this on the side:')
+  expect(card).toContain('background subagent and carries on with its task')
+  expect(card).not.toContain(SIDE_LEAD)
+
+  // Only a prompt can go to a subagent; a command or a CLAUDE.md line keeps its default timing.
+  expect(whenOf(parseFix({ kind: 'command', text: '/compact', when: 'side' })!)).toBe('next')
+  expect(whenOf(parseFix({ kind: 'claude-md', text: '- Be brief.', when: 'side' })!)).toBe('later')
+
+  expect(promptedMessage({ label: 'The fix', when: 'side', isWorking: true })).toBe(
+    'The fix is in your prompt box. Press Enter now. Claude starts a background subagent for it and keeps working on its task.',
+  )
+  expect(promptedMessage({ label: 'The fix', when: 'side', isWorking: false })).toBe('The fix is in your prompt box. Press Enter to send it.')
+
+  const m = emptyMetrics(0)
+  const prompt = comparePrompt(m, score(m), [])
+  expect(prompt).toContain('side for a prompt fix that does read-only work')
+  expect(prompt).toContain('/btw, which cannot read files or run commands')
+  expect(prompt).toContain('"when":"btw|side|steer|next|interrupt|later"')
+
+  const [insight] = parseInsights(`{"insights":[{"kind":"habit","title":"Review auth on the side","detail":"d","fix":{"kind":"prompt","text":"Review src/auth.ts.","when":"side"}}]}`)
+  expect(insight?.fix?.when).toBe('side')
+})
+
+test('an expert side suggestion fills the prompt box from Run on the side, without Fix with Claude', { options: { analyzeEvery: 0, judgeTurns: false } }, async ($, on) => {
+  const filled: string[] = []
+  const submitted: string[] = []
+  mock.store(on)
+  mock.clock(on, { now: 1000 })
+  mock.env(on, { HOME: '/Users/kevin' })
+  on('prompt.submit', ($, e) => {
+    submitted.push(e.text)
+    return { text: e.text }
+  })
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }) as never)
+  on('prompt.fill', ($, e) => {
+    filled.push(e.text)
+    return { isFilled: true }
+  })
+  const reply = '{"insights":[{"kind":"habit","title":"Review auth on the side","detail":"d","priority":3,"category":"quality","stage":"verify","fix":{"kind":"prompt","text":"Review src/auth.ts for missing null checks.","when":"side"}}]}'
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: reply, usage: USAGE } }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return h(Text, {}, 'engine draws') as never
+  })
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' as const })
+
+  const ui = await $.ui.mount({ plugin: 'session-coach', surface: 'desktop', component: 'Pane', requestId: 'session-coach', props: { bodyColumns: 100 } as never })
+  await ui.press({ key: 'analyze' })
+  await $.turn.start({ text: 'keep building', turnId: 't2' } as never)
+  expect((await ui.find({ key: 'insight-0-text' }))?.text).toContain('Run this on the side:')
+  expect(await ui.find({ key: 'insight-0-send' })).toBeUndefined()
+  expect((await ui.find({ key: 'insight-0-fill' }))?.props.label).toBe('Run on the side')
+
+  const before = submitted.length
+  await ui.press({ key: 'insight-0-fill' })
+  expect(filled.at(-1)).toBe(`${SIDE_LEAD}\n\nReview src/auth.ts for missing null checks.`)
+  expect(submitted.length).toBe(before)
+  expect((await ui.find({ key: 'status' }))?.text).toContain('Claude starts a background subagent for it and keeps working on its task.')
   await ui.unmount()
 })

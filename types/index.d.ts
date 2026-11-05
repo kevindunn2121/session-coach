@@ -50,7 +50,7 @@ export type Score = { total: number; parts: ScoreParts }
 
 export type FixKind = 'prompt' | 'claude-md' | 'settings' | 'file' | 'command' | 'action'
 
-export type FixWhen = 'btw' | 'steer' | 'next' | 'interrupt' | 'later'
+export type FixWhen = 'btw' | 'side' | 'steer' | 'next' | 'interrupt' | 'later'
 
 export type Fix = { kind: FixKind; text: string; target?: string; then?: string; when?: FixWhen }
 

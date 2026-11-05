@@ -1,7 +1,7 @@
 import type { Fix, FixKind, FixWhen } from '../types'
 
 const FIX_KINDS: readonly FixKind[] = ['prompt', 'claude-md', 'settings', 'file', 'command', 'action']
-const FIX_WHENS: readonly FixWhen[] = ['btw', 'steer', 'next', 'interrupt', 'later']
+const FIX_WHENS: readonly FixWhen[] = ['btw', 'side', 'steer', 'next', 'interrupt', 'later']
 
 const DEFAULT_WHEN: Record<FixKind, FixWhen> = {
   prompt: 'next',
@@ -14,6 +14,7 @@ const DEFAULT_WHEN: Record<FixKind, FixWhen> = {
 
 export const WHEN_TEXT: Record<FixWhen, string> = {
   btw: 'Now, while Claude keeps working. It goes in as a /btw side question, so Claude answers without changing its task.',
+  side: 'Now, while Claude keeps working. Claude hands it to a background subagent and carries on with its task.',
   steer: 'Now, while Claude is working. Press Enter and Claude reads it before its next step.',
   next: 'After Claude finishes this turn, as your next prompt.',
   interrupt: 'Stop first. Press Esc to stop Claude, then send this instead, because continuing wastes work.',
@@ -21,7 +22,7 @@ export const WHEN_TEXT: Record<FixWhen, string> = {
 }
 
 export const FIX_TIMING_RULES =
-  'Set when for each fix: btw for a side question that must not change the current task (it is sent as /btw), steer for a small correction Claude should apply while it keeps working, next for work after the current turn finishes, interrupt when Claude is going the wrong way and continuing wastes work (the developer presses Esc first), later for CLAUDE.md, settings or other global changes that take effect in a new session.'
+  'Set when for each fix: btw for a side question that the conversation so far can answer and that must not change the current task (it is sent as /btw, which cannot read files or run commands), side for a prompt fix that does read-only work, such as a review, a check, a test run or a search, and can run in a background subagent while Claude keeps working without touching the files it is editing, steer for a small correction Claude should apply while it keeps working, next for work after the current turn finishes, interrupt when Claude is going the wrong way and continuing wastes work (the developer presses Esc first), later for CLAUDE.md, settings or other global changes that take effect in a new session.'
 
 export const whenOf = (fix: Fix): FixWhen => fix.when ?? DEFAULT_WHEN[fix.kind]
 
@@ -47,7 +48,9 @@ export const parseFix = (value: unknown): Fix | undefined => {
   if (!FIX_KINDS.includes(kind) || text === '') return undefined
   const target = asString(raw.target)
   const then = asString(raw.then)
-  const when = parseWhen(asString(raw.when))
+  const parsedWhen = parseWhen(asString(raw.when))
+  // Only a prompt can go to a background subagent; any other kind keeps its default timing.
+  const when = parsedWhen === 'side' && kind !== 'prompt' ? undefined : parsedWhen
   return { kind, text, ...(target ? { target } : {}), ...(then ? { then } : {}), ...(when ? { when } : {}) }
 }
 
@@ -59,6 +62,7 @@ const fence = (text: string): string[] => ['```text', text, '```']
 
 const PROMPT_LEAD: Record<FixWhen, string> = {
   btw: 'Ask this on the side:',
+  side: 'Run this on the side:',
   steer: 'Send this while Claude works:',
   next: 'Add this to your next prompt:',
   interrupt: 'Stop Claude, then send this:',
@@ -90,10 +94,15 @@ export const fixCopyText = (fix: Fix): string => {
   return `${lead}${fix.text}${then ? `\n\nThen: ${then}` : ''}`
 }
 
-export const fixPromptText = (fix: Fix, isDisplay = false): string => {
+export const SIDE_LEAD =
+  'Do not stop or change your current task. Run this in a background subagent, keep working while it runs, and tell me what it found when it finishes:'
+
+export const fixPromptText =(fix: Fix, isDisplay = false): string => {
   switch (fix.kind) {
     case 'prompt':
-      return whenOf(fix) === 'btw' && !fix.text.startsWith('/btw') ? `/btw ${fix.text}` : fix.text
+      if (whenOf(fix) === 'btw') return fix.text.startsWith('/btw') ? fix.text : `/btw ${fix.text}`
+      if (whenOf(fix) === 'side') return isDisplay || fix.text.startsWith(SIDE_LEAD) ? fix.text : `${SIDE_LEAD}\n\n${fix.text}`
+      return fix.text
     case 'command':
       return fix.text
     case 'claude-md':
@@ -106,7 +115,7 @@ export const fixPromptText = (fix: Fix, isDisplay = false): string => {
 }
 
 export const FIX_SCHEMA =
-  '"fix":{"kind":"prompt|claude-md|settings|file|command|action","target":"file path, for claude-md, settings or file","text":"the exact text to paste, add or run","when":"btw|steer|next|interrupt|later","then":"what to do next, such as start a new session"}'
+  '"fix":{"kind":"prompt|claude-md|settings|file|command|action","target":"file path, for claude-md, settings or file","text":"the exact text to paste, add or run","when":"btw|side|steer|next|interrupt|later","then":"what to do next, such as start a new session"}'
 
 export type PromptedMessage = { label: string; when: FixWhen; isWorking: boolean }
 
@@ -116,6 +125,8 @@ export const promptedMessage = ({ label, when, isWorking }: PromptedMessage): st
   switch (when) {
     case 'btw':
       return `${lead} Press Enter now. Claude answers on the side and keeps working on its task.`
+    case 'side':
+      return `${lead} Press Enter now. Claude starts a background subagent for it and keeps working on its task.`
     case 'steer':
       return `${lead} Press Enter now. Claude reads it before its next step.`
     case 'next':

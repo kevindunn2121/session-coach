@@ -2,6 +2,11 @@
 
 All changes to session-coach, newest first. Pull request numbers up to #5 refer to the earlier repository `Nterlace-Solutions/session-coach`.
 
+## 0.10.0 (2026-11-05)
+
+- A sixth fix timing, **On the side**, for expert suggestions that do read-only work, such as a review, a check, a test run or a search. **Run on the side** puts the fix in your prompt box with an instruction to run it in a background subagent, so Claude keeps working on its task. The card has no Fix with Claude, so you read the fix before you send it. The analysis model picks the timing. Only a prompt fix can have it; any other kind keeps its default timing.
+- The timing rules tell the model that `/btw` answers only from the conversation and cannot read files or run commands, so it picks Side question only for questions the conversation can answer.
+
 ## 0.9.0 (2026-11-04)
 
 - Live tips fix in one click, like setup audit cards. The "To make it stick" lines of the verify, unread-file, plan and subagent tips get **Fix**, which adds the line to `~/.claude/CLAUDE.md` under `## Session coach` with a backup and a diff, and **Undo**. The expert analysis can return the same kind of patch with a suggestion, and the plugin checks it with the same rules as the setup audit.
