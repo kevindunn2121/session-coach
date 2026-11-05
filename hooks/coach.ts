@@ -1,5 +1,6 @@
 import type { Insight, InsightKind, Metrics, Playbook, Score, Tip } from '../types'
 
+import { PATCH_RULES, PATCH_SCHEMA, parsePatch } from './apply'
 import { extractJson } from './feed'
 import { FIX_SCHEMA, FIX_TIMING_RULES, fixCopyText, parseFix } from './fix'
 import { CATEGORY_LABEL, PRIORITY_LABEL, RANK_RULES, RANK_SCHEMA, STAGE_LABEL, parseCategory, parsePriority, parseStage } from './rank'
@@ -54,8 +55,9 @@ export const comparePrompt = (m: Metrics, s: Score, heuristics: Tip[], profile =
     'file for another file, command for a slash command or shell command to run in Claude, and action for a step the developer does by hand.',
     'text is the exact text to paste, add or run, not a description of it. then is what to do after, for example start a new session after a CLAUDE.md change.',
     FIX_TIMING_RULES,
+    `${PATCH_RULES} A patch goes with the fix it applies, so set patch only when fix is set.`,
     RANK_RULES,
-    `Return JSON only: {"insights":[{"kind":"habit|skill|agent|hook|command","title":"under 60 chars","detail":"one or two sentences","name":"kebab-case name when kind is not habit","source":"which playbook practice",${RANK_SCHEMA},${FIX_SCHEMA}}]}`,
+    `Return JSON only: {"insights":[{"kind":"habit|skill|agent|hook|command","title":"under 60 chars","detail":"one or two sentences","name":"kebab-case name when kind is not habit","source":"which playbook practice",${RANK_SCHEMA},${FIX_SCHEMA},${PATCH_SCHEMA}}]}`,
   ].join('\n')
 
 const asString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
@@ -70,6 +72,7 @@ export const parseInsights = (text: string): Insight[] => {
       const name = asString(item?.name)
       const source = asString(item?.source)
       const fix = parseFix(item?.fix)
+      const patch = fix ? parsePatch(item?.patch) : undefined
       return {
         kind,
         title: asString(item?.title),
@@ -77,6 +80,7 @@ export const parseInsights = (text: string): Insight[] => {
         ...(name ? { name } : {}),
         ...(source ? { source } : {}),
         ...(fix ? { fix } : {}),
+        ...(patch ? { patch } : {}),
         priority: parsePriority(item?.priority),
         category: parseCategory(item?.category),
         stage: parseStage(item?.stage, parseCategory(item?.category)),

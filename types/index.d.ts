@@ -68,7 +68,7 @@ export type Category = 'safety' | 'cost' | 'quality' | 'context' | 'workflow' | 
 
 export type Stage = 'start' | 'setup' | 'plan' | 'build' | 'verify' | 'ship' | 'learn' | 'context' | 'safety'
 
-export type Tip = { id: string; text: string; fix: Fix; permanent?: Fix; priority: Priority; category: Category; stage: Stage }
+export type Tip = { id: string; text: string; fix: Fix; permanent?: Fix; patch?: Patch; priority: Priority; category: Category; stage: Stage }
 
 export type InsightKind = 'habit' | 'skill' | 'agent' | 'hook' | 'command'
 
@@ -79,6 +79,7 @@ export type Insight = {
   name?: string
   source?: string
   fix?: Fix
+  patch?: Patch
   priority?: Priority
   category?: Category
   stage?: Stage
@@ -168,7 +169,11 @@ export type SetupRecommendation = {
 
 export type ApplyState = 'applied' | 'already' | 'undone' | 'undo-blocked' | 'apply-failed' | 'sent' | 'filled' | 'copied' | 'copy-failed'
 
-export type AppliedPatch = { path: string; diff?: string; backup?: string; afterPrint?: string; isNew?: boolean; reason?: string }
+export type AppliedPatch = { path: string; diff?: string; backup?: string; afterPrint?: string; isNew?: boolean; reason?: string; patch?: Patch; title?: string }
+
+// The Undo records kept in the plugin store, so Undo survives a reload. The setup ledger is keyed by
+// recommendation id and holds the audit fingerprint; the live-tip ledger is keyed by patch.
+export type AppliedLedger = { fingerprint?: string; states: Record<string, ApplyState>; applied: Record<string, AppliedPatch> }
 
 export type SetupAudit = {
   at: number
@@ -203,6 +208,8 @@ declare module 'claude-code' {
       setupSkipped: string[]
       setupApplyState: Record<string, ApplyState>
       setupApplied: Record<string, AppliedPatch>
+      tipApplyState: Record<string, ApplyState>
+      tipApplied: Record<string, AppliedPatch>
       planUsage: UsageWindow[]
       coachSpend: CoachSpend | null
       git: GitStatus | null

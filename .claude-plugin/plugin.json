@@ -1,6 +1,6 @@
 {
   "name": "session-coach",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Coaches you while you work with Claude: a live session score, a turn judge, expert analysis and a setup audit, ranked P1 to P4 with exact fixes.",
   "author": { "name": "Kevin Dunn" },
   "types": "./types/index.d.ts",

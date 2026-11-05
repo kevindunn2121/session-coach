@@ -1,4 +1,4 @@
-import type { Patch, PatchPlan, SettingsPatch } from '../types'
+import type { Fix, Patch, PatchPlan, SettingsPatch } from '../types'
 
 // The plugin writes only these changes itself. Hooks, allow rules and every other key
 // go to Claude, so its permission prompt reviews them.
@@ -90,7 +90,27 @@ export const parsePatch = (value: unknown): Patch | undefined => {
   }
 }
 
-export const resolveTarget = (target: string, home: string, cwd: string): string => {
+// Rule tips put their "To make it stick" lines here, grouped under one heading.
+export const TIP_TARGET = '~/.claude/CLAUDE.md'
+export const TIP_HEADING = '## Session coach'
+
+// The one-click patch for a tip's permanent fix: CLAUDE.md lines only. Other kinds go to Claude.
+export const tipPatch = (fix: Fix | undefined): Patch | undefined =>
+  fix?.kind === 'claude-md' ? parsePatch({ kind: 'claude-md-append', target: fix.target ?? TIP_TARGET, heading: TIP_HEADING, lines: fix.text }) : undefined
+
+// A stable id for a live-tip patch, so its Undo record survives a reload and matches the
+// same suggestion when the model returns it again.
+export const patchId = (patch: Patch): string => {
+  const text = JSON.stringify(patch)
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return `tip-${hash.toString(16).padStart(8, '0')}`
+}
+
+export const resolveTarget =(target: string, home: string, cwd: string): string => {
   const path = slashes(target)
   if (path === '~' || path.startsWith('~/')) return `${slashes(home).replace(/\/+$/, '')}${path.slice(1)}`
   if (path.startsWith('/') || /^[A-Za-z]:\//.test(path)) return path

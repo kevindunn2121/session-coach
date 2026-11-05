@@ -1,8 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteRequest, ModelCompleteResult, PluginOptions, Register, RenderChildren, RenderSurface } from 'claude-code'
 
-import type { AppliedPatch, ApplyState, CoachJob, FeedStatus, Fix, Insight, Metrics, Playbook, PlaybookTrail, SetupAudit, SetupRecommendation, Tip, UsageWindow } from '../types'
-import { backupPath, diffLines, planPatch, resolveTarget, restoreText } from './apply'
+import type { AppliedLedger, AppliedPatch, ApplyState, CoachJob, FeedStatus, Fix, Insight, Metrics, Patch, Playbook, PlaybookTrail, SetupAudit, SetupRecommendation, Tip, UsageWindow } from '../types'
+import { backupPath, diffLines, patchId, planPatch, resolveTarget, restoreText } from './apply'
 import { comparePrompt, parseInsights, playbookText, reportMarkdown } from './coach'
 import type { HistoryEntry } from './coach'
 import { SEED_PLAYBOOK, buildTrail, collectPosts, mergePosts, parsePlaybook, pastedPosts, playbookPrompt, splitList } from './feed'
@@ -10,7 +10,7 @@ import type { FetchText } from './feed'
 import { GUIDE_FILE, MAP_FILE, TRANSPARENCY_FILE, renderPlaybookMap } from './map'
 import { renderTransparency } from './transparency'
 import { VERDICT_COLOR, VERDICT_GLYPH, VERDICT_LABEL, judgePrompt, parseJudgment, sparkline, turnDelta } from './judge'
-import { auditPrompt, fingerprint, mcpServerNames, measure, parseAgentFile, parseRecommendations, recommendationCard, snapshotText, summarizeSettings } from './setup'
+import { appliedLines, auditPrompt, earlierFixCard, fingerprint, mcpServerNames, measure, parseAgentFile, parseRecommendations, recommendationCard, snapshotText, summarizeSettings } from './setup'
 import type { AgentDef, InstructionFile, SettingsSummary, SetupSnapshot } from './setup'
 import {
   emptyMetrics,
@@ -53,6 +53,8 @@ const setupNoteRef = atom({ plugin: 'session-coach', key: 'setupNote' } as const
 const setupSkippedRef = atom({ plugin: 'session-coach', key: 'setupSkipped' } as const, [])
 const setupApplyStateRef = atom({ plugin: 'session-coach', key: 'setupApplyState' } as const, {})
 const setupAppliedRef = atom({ plugin: 'session-coach', key: 'setupApplied' } as const, {})
+const tipApplyStateRef = atom({ plugin: 'session-coach', key: 'tipApplyState' } as const, {})
+const tipAppliedRef = atom({ plugin: 'session-coach', key: 'tipApplied' } as const, {})
 const planUsageRef = atom({ plugin: 'session-coach', key: 'planUsage' } as const, [])
 const spendRef = atom({ plugin: 'session-coach', key: 'coachSpend' } as const, null)
 const gitRef = atom({ plugin: 'session-coach', key: 'git' } as const, null)
@@ -490,10 +492,10 @@ const runAudit = async ($: EngineInterface, isForced: boolean): Promise<SetupAud
     await update($, setupRef, () => audit)
     if (stored?.fingerprint !== print) {
       await update($, setupSkippedRef, () => [])
-      await update($, setupApplyStateRef, () => ({}))
-      await update($, setupAppliedRef, () => ({}))
       await $.store.set('setupSkipped', { fingerprint: print, ids: [] })
     }
+    // A new reply can reuse an id for another change, even with the same fingerprint.
+    await carrySetupFixes($, audit, await readLedger($, 'setup'))
     await noteSetup($, `${recommendations.length} recommendations. Instruction files add ~${measured.instructionTokens} tokens to every request.`, false)
     $.ui.toast(`Coach: setup audit found ${recommendations.length} recommendations. /coach setup to review.`)
     return audit
@@ -505,8 +507,60 @@ const runAudit = async ($: EngineInterface, isForced: boolean): Promise<SetupAud
   }
 }
 
-const setApplyState = ($: EngineInterface, id: string, state: ApplyState) =>
-  update($, setupApplyStateRef, states => ({ ...states, [id]: state }))
+// Undo records. Each fix writes its ledger to $.state for the panes and to $.store, so Undo
+// survives a plugin reload and a new session. The setup ledger also carries the audit fingerprint.
+type Ledger = 'setup' | 'tip'
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const asLedger = (value: unknown): AppliedLedger | undefined =>
+  isRecord(value) && isRecord(value.states) && isRecord(value.applied) ? (value as AppliedLedger) : undefined
+
+const readLedger = async ($: EngineInterface, ledger: Ledger): Promise<AppliedLedger> =>
+  ledger === 'setup'
+    ? { states: await read($, setupApplyStateRef), applied: await read($, setupAppliedRef) }
+    : { states: await read($, tipApplyStateRef), applied: await read($, tipAppliedRef) }
+
+const writeLedger = async ($: EngineInterface, ledger: Ledger, { states, applied }: AppliedLedger): Promise<void> => {
+  if (ledger === 'setup') {
+    await update($, setupApplyStateRef, () => states)
+    await update($, setupAppliedRef, () => applied)
+    const audit = await read($, setupRef)
+    await $.store.set('setupApplied', { ...(audit ? { fingerprint: audit.fingerprint } : {}), states, applied })
+    return
+  }
+  await update($, tipApplyStateRef, () => states)
+  await update($, tipAppliedRef, () => applied)
+  await $.store.set('tipApplied', { states, applied })
+}
+
+// `applied`: a record to keep, null to drop the one there, undefined to leave it as it is.
+const recordFix = async ($: EngineInterface, ledger: Ledger, id: string, state: ApplyState, applied?: AppliedPatch | null): Promise<void> => {
+  const current = await readLedger($, ledger)
+  const { [id]: _, ...rest } = current.applied
+  await writeLedger($, ledger, {
+    states: { ...current.states, [id]: state },
+    applied: applied === undefined ? current.applied : applied === null ? rest : { ...rest, [id]: applied },
+  })
+}
+
+const setApplyState = ($: EngineInterface, id: string, state: ApplyState) => recordFix($, 'setup', id, state)
+
+// A new audit keeps every fix that is still applied, so its Undo stays. A fix whose id the new
+// audit reuses for a different change moves to its own key, and shows under Earlier fixes.
+const carrySetupFixes = async ($: EngineInterface, audit: SetupAudit, ledger: AppliedLedger): Promise<void> => {
+  const patches = new Map(audit.recommendations.map(rec => [rec.id, JSON.stringify(rec.patch)]))
+  const states: Record<string, ApplyState> = {}
+  const applied: Record<string, AppliedPatch> = {}
+  for (const [id, state] of Object.entries(ledger.states)) {
+    const record = ledger.applied[id]
+    if (state !== 'applied' || record?.patch === undefined) continue
+    const key = !patches.has(id) || patches.get(id) === JSON.stringify(record.patch) ? id : `earlier-${id}`
+    states[key] = 'applied'
+    applied[key] = record
+  }
+  await writeLedger($, 'setup', { states, applied })
+}
 
 const FILL_TIMEOUT_MS = 3000
 
@@ -550,56 +604,75 @@ const copyText = async ($: EngineInterface, text: string, surface: RenderSurface
 
 const recommendationCopyText = (rec: SetupRecommendation): string => (rec.manualFix ? fixCopyText(rec.manualFix) : rec.applyPrompt)
 
-const setApplied = ($: EngineInterface, id: string, applied: AppliedPatch | undefined) =>
-  update($, setupAppliedRef, all => {
-    const { [id]: _, ...rest } = all
-    return applied ? { ...rest, [id]: applied } : rest
-  })
-
-const failFix = async ($: EngineInterface, id: string, path: string, reason: string): Promise<void> => {
-  await setApplied($, id, { path, reason })
-  await setApplyState($, id, 'apply-failed')
-}
-
-// One click: back up the file, write the patch, and keep what Undo needs.
-const fixRecommendation = async ($: EngineInterface, rec: SetupRecommendation): Promise<void> => {
-  if (!rec.patch) return
+// One click: back up the file, write the patch, and keep what Undo needs, with the patch and a
+// title, so Undo works from the record alone after the card is gone.
+const applyFix = async ($: EngineInterface, ledger: Ledger, id: string, patch: Patch, title: string): Promise<void> => {
   const home = await homeDir($)
-  const path = resolveTarget(rec.patch.target, home, (await $.session.cwd()).replace(/[\\/]+$/, ''))
+  const path = resolveTarget(patch.target, home, (await $.session.cwd()).replace(/[\\/]+$/, ''))
   const current = await readText($, path)
-  const plan = planPatch(current, rec.patch)
-  if ('error' in plan) return failFix($, rec.id, path, plan.error)
-  if (!plan.isChanged) {
-    await setApplied($, rec.id, { path })
-    await setApplyState($, rec.id, 'already')
-    return
-  }
-  const backup = current === undefined ? undefined : backupPath(home, rec.id, rec.patch.target, await $.clock.now())
+  const plan = planPatch(current, patch)
+  if ('error' in plan) return recordFix($, ledger, id, 'apply-failed', { path, reason: plan.error, patch, title })
+  if (!plan.isChanged) return recordFix($, ledger, id, 'already', { path, patch, title })
+  const backup = current === undefined ? undefined : backupPath(home, id, patch.target, await $.clock.now())
   try {
     if (backup !== undefined) await $.fs.write(backup, current ?? '')
     await $.fs.write(path, plan.after)
   } catch (error) {
-    return failFix($, rec.id, path, error instanceof Error ? error.message : String(error))
+    return recordFix($, ledger, id, 'apply-failed', { path, reason: error instanceof Error ? error.message : String(error), patch, title })
   }
-  await setApplied($, rec.id, { path, diff: diffLines(plan.before, plan.after), ...(backup ? { backup } : {}), afterPrint: fingerprint(plan.after), isNew: current === undefined })
-  await setApplyState($, rec.id, 'applied')
+  const applied: AppliedPatch = { path, diff: diffLines(plan.before, plan.after), ...(backup ? { backup } : {}), afterPrint: fingerprint(plan.after), isNew: current === undefined, patch, title }
+  await recordFix($, ledger, id, 'applied', applied)
+}
+
+const undoFix = async ($: EngineInterface, ledger: Ledger, id: string): Promise<ApplyState | undefined> => {
+  const applied = (await readLedger($, ledger)).applied[id]
+  if (!applied?.patch) return undefined
+  const current = await readText($, applied.path)
+  const before = applied.isNew ? undefined : applied.backup ? await readText($, applied.backup) : undefined
+  const state: ApplyState = current === undefined || fingerprint(current) !== applied.afterPrint || (!applied.isNew && before === undefined) ? 'undo-blocked' : 'undone'
+  if (state === 'undone') await $.fs.write(applied.path, restoreText(applied.patch, before))
+  await recordFix($, ledger, id, state)
+  return state
+}
+
+const fixRecommendation = async ($: EngineInterface, rec: SetupRecommendation): Promise<void> => {
+  if (rec.patch) await applyFix($, 'setup', rec.id, rec.patch, rec.title)
 }
 
 const undoRecommendation = async ($: EngineInterface, rec: SetupRecommendation): Promise<void> => {
-  const applied = (await read($, setupAppliedRef))[rec.id]
-  if (!rec.patch || !applied) return
-  const current = await readText($, applied.path)
-  if (current === undefined || fingerprint(current) !== applied.afterPrint) {
-    await setApplyState($, rec.id, 'undo-blocked')
-    return
-  }
-  const before = applied.isNew ? undefined : applied.backup ? await readText($, applied.backup) : undefined
-  if (!applied.isNew && before === undefined) {
-    await setApplyState($, rec.id, 'undo-blocked')
-    return
-  }
-  await $.fs.write(applied.path, restoreText(rec.patch, before))
-  await setApplyState($, rec.id, 'undone')
+  await undoFix($, 'setup', rec.id)
+}
+
+// Undo for a fix whose card is gone. The note goes to the pane's status line.
+const undoEarlierFix = async ($: EngineInterface, ledger: Ledger, id: string): Promise<void> => {
+  const applied = (await readLedger($, ledger)).applied[id]
+  const state = await undoFix($, ledger, id)
+  if (state === undefined || applied === undefined) return
+  const note = state === 'undone' ? `↩ Undone. ${applied.path} is back as it was.` : `${applied.path} changed after the fix, so Undo left it alone.${applied.backup ? ` The file before the fix is saved at ${applied.backup}.` : ''}`
+  if (ledger === 'setup') await update($, setupNoteRef, () => note)
+  else await setAction($, note, false)
+}
+
+const fixTip = ($: EngineInterface, patch: Patch, title: string): Promise<void> => applyFix($, 'tip', patchId(patch), patch, title)
+
+const undoTip = async ($: EngineInterface, patch: Patch): Promise<void> => {
+  await undoFix($, 'tip', patchId(patch))
+}
+
+// Fix with Claude for a live tip: the fix goes in as your prompt, without the prompt box.
+const sendFix = async ($: EngineInterface, fix: Fix, label: string): Promise<void> => {
+  await $.prompt.submit({ text: fixPromptText(fix), asUser: true })
+  const isWorking = await read($, isWorkingRef)
+  const when = whenOf(fix)
+  await setAction(
+    $,
+    !isWorking
+      ? `Sent ${label.toLowerCase()} to Claude.`
+      : when === 'interrupt'
+        ? `Sent ${label.toLowerCase()} to Claude. Press Esc to stop the current turn so it runs now.`
+        : `Sent ${label.toLowerCase()} to Claude. It runs when the current turn finishes.`,
+    false,
+  )
 }
 
 const sendRecommendation = async ($: EngineInterface, rec: SetupRecommendation): Promise<void> => {
@@ -636,6 +709,27 @@ const loadStoredSetup = async ($: EngineInterface): Promise<void> => {
   await update($, setupRef, () => stored)
   const skipped = (await $.store.get('setupSkipped')) as SkippedRecord | undefined
   if (skipped?.fingerprint === stored.fingerprint) await update($, setupSkippedRef, () => skipped.ids)
+  const ledger = asLedger(await $.store.get('setupApplied'))
+  if (ledger === undefined) return
+  if (ledger.fingerprint === stored.fingerprint) {
+    await update($, setupApplyStateRef, () => ledger.states)
+    await update($, setupAppliedRef, () => ledger.applied)
+  } else await carrySetupFixes($, stored, ledger)
+}
+
+const loadStoredTipFixes = async ($: EngineInterface): Promise<void> => {
+  const ledger = asLedger(await $.store.get('tipApplied'))
+  if (ledger === undefined) return
+  await update($, tipApplyStateRef, () => ledger.states)
+  await update($, tipAppliedRef, () => ledger.applied)
+}
+
+// The panes read the Undo records from $.state. Load them from the store at session start and
+// again when a pane opens, since a plugin reload can come without a session start.
+const openPane = async ($: EngineInterface, id: string, title: string): Promise<void> => {
+  await loadStoredSetup($)
+  await loadStoredTipFixes($)
+  await $.ui.open({ id, title })
 }
 
 const buildReport = async ($: EngineInterface): Promise<string> => {
@@ -691,6 +785,7 @@ export const register: Register = (on, options) => {
     $.clock.after(3000, () => void refreshFeed($, false))
     await update($, auditingRef, () => false)
     await loadStoredSetup($)
+    await loadStoredTipFixes($)
     $.clock.after(8000, () => void runAudit($, false))
     $.clock.after(1500, () => void refreshPlanUsage($))
     $.clock.after(2000, () => void checkGit($))
@@ -802,7 +897,7 @@ export const register: Register = (on, options) => {
     const [verb = '', ...rest] = e.args.trim().split(/\s+/)
     switch (verb.toLowerCase()) {
       case '': {
-        await $.ui.open({ id: PANE, title: 'Session coach' })
+        await openPane($, PANE, 'Session coach')
         const metrics = await currentMetrics($)
         const s = score(metrics)
         return { text: `Coach pane opened. Score ${s.total}/100 after ${metrics.turns} turns.` }
@@ -821,7 +916,7 @@ export const register: Register = (on, options) => {
         return { text: `Saved (${pasted.length + 1} pasted posts). Run /coach refresh to rebuild the playbook.` }
       }
       case 'setup': {
-        await $.ui.open({ id: SETUP_PANE, title: 'Setup audit' })
+        await openPane($, SETUP_PANE, 'Setup audit')
         const audit = await runAudit($, rest[0]?.toLowerCase() === 'refresh')
         const skipped = await read($, setupSkippedRef)
         const open = audit?.recommendations.filter(rec => !skipped.includes(rec.id)) ?? []
@@ -874,7 +969,7 @@ export const register: Register = (on, options) => {
         {planText !== '' && <Text color={plan >= 80 ? 'red' : 'yellow'}>{planText}</Text>}
         {topItem && <Text color={PRIORITY_COLOR[topItem.priority]} bold>{chip}</Text>}
         <Text dimColor>{top.length > width ? `${top.slice(0, width - 1)}…` : top}</Text>
-        <Button key="details" label="Details" onPress={() => void $.ui.open({ id: PANE, title: 'Session coach' })} />
+        <Button key="details" label="Details" onPress={() => void openPane($, PANE, 'Session coach')} />
         <Button key="hide" label="Hide" onPress={() => void update($, bandHiddenRef, () => true)} />
       </Box>
     )
@@ -904,6 +999,8 @@ export const register: Register = (on, options) => {
     const insightsFresh = action !== null && !action.isRunning && action.text.includes('new suggestion') && now - action.at < FRESH_MS
     const items = rankedItems(flagged, insights)
     const counts = priorityCounts(items)
+    const tipStates = await read($, tipApplyStateRef)
+    const tipApplied = await read($, tipAppliedRef)
     const bar = (value: number) => '█'.repeat(Math.round(value / 2)) + '░'.repeat(10 - Math.round(value / 2))
 
     const nudgeFix: Fix | undefined = latest?.nudge ? { kind: 'prompt', text: latest.nudge, ...(latest.nudgeWhen ? { when: latest.nudgeWhen } : {}) } : undefined
@@ -931,12 +1028,23 @@ export const register: Register = (on, options) => {
         {children}
       </Box>
     )
-    const fixButtons = (key: string, fix: Fix, label: string) => (
-      <Box key={`${key}-buttons`} flexDirection="row" gap={1}>
-        <Button key={`${key}-fill`} label="Put in prompt" onPress={() => putFixInPrompt($, fix, label)} />
-        <Button key={`${key}-copy`} label="Copy" onPress={press => copyText($, fixCopyText(fix), press.surface, label, 'prompt')} />
-      </Box>
-    )
+    // A fix with a patch gets Fix and Undo, like a setup audit card, and Fix with Claude only when
+    // the plugin cannot write it. A fix without one goes to Claude. Action fixes are steps for you.
+    const fixButtons = (key: string, fix: Fix, label: string, title: string, patch?: Patch) => {
+      const state = patch ? tipStates[patchId(patch)] : undefined
+      const canFix = state === undefined || state === 'undone'
+      const canSend = fix.kind !== 'action' && (patch === undefined || state === 'apply-failed')
+      return (
+        <Box key={`${key}-buttons`} flexDirection="row" gap={1}>
+          {patch && canFix && <Button key={`${key}-fix`} variant="primary" label="Fix" onPress={() => fixTip($, patch, title)} />}
+          {patch && state === 'applied' && <Button key={`${key}-undo`} label="Undo" onPress={() => undoTip($, patch)} />}
+          {canSend && <Button key={`${key}-send`} variant={patch ? 'primary' : undefined} label="Fix with Claude" onPress={() => sendFix($, fix, label)} />}
+          <Button key={`${key}-fill`} label="Put in prompt" onPress={() => putFixInPrompt($, fix, label)} />
+          <Button key={`${key}-copy`} label="Copy" onPress={press => copyText($, fixCopyText(fix), press.surface, label, 'prompt')} />
+        </Box>
+      )
+    }
+    const patchLines = (patch: Patch | undefined) => (patch ? appliedLines(patch, tipStates[patchId(patch)], tipApplied[patchId(patch)]) : [])
     const card = (item: RankedItem) => (
       <Box key={item.key} flexDirection="column" borderStyle="round" borderColor={PRIORITY_COLOR[item.priority]} paddingX={1}>
         <Box key={`${item.key}-chips`} flexDirection="row" gap={1}>
@@ -950,23 +1058,28 @@ export const register: Register = (on, options) => {
           text={[
             `**${item.title}**`,
             ...(item.detail ? ['', item.detail] : []),
-            ...(item.fix ? ['', fixMarkdown(item.fix)] : []),
-            ...(item.permanent ? ['', fixMarkdown(item.permanent, 'To make it stick')] : []),
+            ...(item.fix ? ['', fixMarkdown(item.fix), ...patchLines(item.permanent ? undefined : item.patch)] : []),
+            ...(item.permanent ? ['', fixMarkdown(item.permanent, 'To make it stick'), ...patchLines(item.patch)] : []),
             '',
             stageMarkdown(config.playbookUrl, item.stage),
           ].join('\n')}
         />
-        {item.fix && fixButtons(item.key, item.fix, 'The fix')}
-        {item.permanent && fixButtons(`${item.key}-permanent`, item.permanent, 'The permanent fix')}
+        {item.fix && fixButtons(item.key, item.fix, 'The fix', item.title, item.permanent ? undefined : item.patch)}
+        {item.permanent && fixButtons(`${item.key}-permanent`, item.permanent, 'The permanent fix', item.title, item.patch)}
       </Box>
     )
+    const shownTipFixes = new Set(items.flatMap(item => (item.patch ? [patchId(item.patch)] : [])))
+    const earlierTipFixes = Object.entries(tipStates).flatMap(([id, state]) => {
+      const applied = tipApplied[id]
+      return state === 'applied' && applied && !shownTipFixes.has(id) ? [{ id, applied }] : []
+    })
 
     return (
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="row" gap={1}>
           <Button key="analyze" variant="primary" label={isAnalyzing ? 'Analyzing…' : 'Analyze now'} onPress={() => analyze($)} />
           <Button key="refresh" label="Refresh feed" onPress={() => refreshFeed($, true)} />
-          <Button key="setup" label="Setup audit" onPress={() => $.ui.open({ id: SETUP_PANE, title: 'Setup audit' })} />
+          <Button key="setup" label="Setup audit" onPress={() => openPane($, SETUP_PANE, 'Setup audit')} />
           <Button key="copy-report" label="Copy report" onPress={async press => copyText($, await buildReport($), press.surface, 'the session report', 'file')} />
         </Box>
         {showAction && action !== null && (
@@ -976,11 +1089,18 @@ export const register: Register = (on, options) => {
         )}
         {section('now', '⚡ Now', verdictColor, [
           <Markdown key="verdict" text={verdictText} />,
-          nudgeFix ? fixButtons('nudge', nudgeFix, 'The next prompt') : null,
+          nudgeFix ? fixButtons('nudge', nudgeFix, 'The next prompt', 'The next prompt') : null,
         ])}
         {section('recs', recsTitle, 'claude', [
           recsNote ? <Markdown key="recs-note" text={recsNote} /> : null,
           ...items.map(card),
+          earlierTipFixes.length > 0 ? <Text key="earlier-title" bold>Earlier fixes you can undo</Text> : null,
+          ...earlierTipFixes.map(({ id, applied }) => (
+            <Box key={`earlier-${id}`} flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
+              <Markdown key={`earlier-text-${id}`} text={earlierFixCard(applied, 'applied')} />
+              <Button key={`undo-${id}`} label="Undo" onPress={() => undoEarlierFix($, 'tip', id)} />
+            </Box>
+          )),
         ])}
         {section('vitals', '📊 Vitals', 'planMode', [<Markdown key="vitals-text" text={vitals.map(line => `- ${line}`).join('\n')} />])}
         {section('score', `🎯 Score ${s.total}/100`, 'suggestion', [
@@ -1031,6 +1151,11 @@ export const register: Register = (on, options) => {
     const applied = await read($, setupAppliedRef)
     const open =sortRecommendations(audit?.recommendations.filter(rec => !skipped.includes(rec.id)) ?? [])
     const counts = priorityCounts(open.map(rec => ({ priority: rec.priority ?? 3 })))
+    const openIds = new Set(open.map(rec => rec.id))
+    const earlier = Object.entries(applyStates).flatMap(([id, state]) => {
+      const record = applied[id]
+      return state === 'applied' && record?.patch && !openIds.has(id) ? [{ id, record }] : []
+    })
     const header = [
       `## 🛠 Setup audit${counts ? ` · ${counts}` : ''}`,
       '',
@@ -1066,6 +1191,13 @@ export const register: Register = (on, options) => {
             </Box>
           )
         })}
+        {earlier.length > 0 && <Text key="earlier-title" bold>Earlier fixes you can undo</Text>}
+        {earlier.map(({ id, record }) => (
+          <Box key={`earlier-${id}`} flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
+            <Markdown key={`earlier-text-${id}`} text={earlierFixCard(record, 'applied')} />
+            <Button key={`undo-${id}`} label="Undo" onPress={() => undoEarlierFix($, 'setup', id)} />
+          </Box>
+        ))}
         <Box flexDirection="row" gap={1}>
           <Button key="rerun" label={isAuditing ? 'Auditing…' : audit ? 'Re-run audit' : 'Run audit'} onPress={() => runAudit($, true)} />
           {skipped.length > 0 && <Button key="unskip" label={`Show ${skipped.length} skipped`} onPress={() => unskipAll($)} />}

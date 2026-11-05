@@ -98,7 +98,7 @@ The fix says where the change goes and what to do next:
 | Command | Run this in Claude: `/compact keep the current task, the files changed so far, and the open decisions`. |
 | Action | A step you do by hand. |
 
-Some tips also have a second fix, labeled "To make it stick", that adds a permanent rule to your CLAUDE.md.
+Some tips also have a second fix, labeled "To make it stick", that adds a permanent rule to your `~/.claude/CLAUDE.md`, under a `## Session coach` heading.
 
 Each fix also has a timing, because Claude can be in the middle of a turn:
 
@@ -110,7 +110,15 @@ Each fix also has a timing, because Claude can be in the middle of a turn:
 | Stop first | Press Esc to stop Claude, then send it, because continuing wastes work. |
 | After this session | When Claude is idle or after the session. Then start a new session. |
 
-Each fix has two buttons. Put in prompt puts the fix in your prompt box, and the status line then says what to press, based on whether Claude is working. Copy copies the fix. In the desktop app, Copy puts the text in the prompt box instead (see [Desktop app notes](#desktop-app-notes)).
+The buttons on each fix:
+
+1. Fix makes the change in one click, the same way as on a setup audit card. The "To make it stick" lines of the verify, unread-file, plan and subagent tips have it, and so does an expert suggestion when the analysis model returns a patch the plugin can write itself. The plugin saves a backup to `~/.claude/session-coach/backups/` first, and the card shows the diff.
+2. Undo puts the file back, unless you edited it after the fix. When the tip stops showing, the fix moves to **Earlier fixes you can undo** at the bottom of the recommendations, so Undo stays.
+3. Fix with Claude sends the fix to Claude as your prompt, in one click and without the prompt box. Fixes without a patch have it, except steps you do by hand. A fix with a patch has it only when the plugin cannot write the file.
+4. Put in prompt puts the fix in your prompt box, so you can edit it first, and the status line says what to press, based on whether Claude is working.
+5. Copy copies the fix. In the desktop app, Copy puts the text in the prompt box instead (see [Desktop app notes](#desktop-app-notes)).
+
+The plugin keeps a record of each fix in its store, so Undo still works after a plugin reload or in a new session.
 
 ## Live score and vitals
 
@@ -157,7 +165,7 @@ Each card shows the problem, the evidence and the change. It also shows a fix yo
 The buttons on each card:
 
 1. Fix makes the change in one click, when the plugin can make it itself: lines added to a `CLAUDE.md`, or `model`, a short list of `env` settings, and `deny` or `ask` rules merged into a `.claude/settings.json`. The plugin saves the file to `~/.claude/session-coach/backups/` first, and the card shows the diff and when the change takes effect. If the change is already there, nothing is written.
-2. Undo puts the file back. If you edited the file after the fix, Undo leaves it alone and tells you where the backup is.
+2. Undo puts the file back. If you edited the file after the fix, Undo leaves it alone and tells you where the backup is. Undo survives a plugin reload and a new session. When a new audit no longer lists a fix you made, or you mark its card Done, the fix moves to **Earlier fixes you can undo** at the bottom of the pane.
 3. Fix with Claude sends the instruction to Claude as your next prompt, in one click, for every other change: hooks, allow rules, skills, agents, MCP servers and new files. Claude makes the change under your normal permission prompts. If Fix cannot write a file, for example a `settings.json` that is not valid JSON, the card says why and offers Fix with Claude.
 4. Copy copies the instruction, and Skip hides the card until your setup files change.
 
@@ -255,7 +263,7 @@ The coach works in the Claude desktop app, with these differences from a termina
 
 - Toasts do not show. Button results show in the status line at the top of the pane instead.
 - Plugins cannot write to the clipboard. Copy puts the text in your prompt box for you to copy, and Copy report saves the report to `~/.claude/session-coach/export.md`.
-- Fix and Fix with Claude on a setup card do not use the prompt box, so they work the same in the desktop app.
+- Fix and Fix with Claude on a setup card or a tip do not use the prompt box, so they work the same in the desktop app.
 - `/plugin` does not run in the desktop app. Use + next to the prompt box, then Plugins.
 
 ## Files

@@ -207,11 +207,12 @@ const TAKES_EFFECT: Record<Patch['kind'], string> = {
   'settings-merge': 'It takes effect in your next session.',
 }
 
-export const applyNote = (rec: SetupRecommendation, state: ApplyState, applied?: AppliedPatch): string => {
+export const applyNote = (patch: Patch | undefined, state: ApplyState, applied?: AppliedPatch): string => {
   const path = applied?.path ? `\`${applied.path}\`` : 'the file'
+  const kind = (applied?.patch ?? patch)?.kind
   switch (state) {
     case 'applied':
-      return [`✓ Changed ${path}.`, rec.patch ? TAKES_EFFECT[rec.patch.kind] : '', '**Undo** puts the file back.'].filter(Boolean).join(' ')
+      return [`✓ Changed ${path}.`, kind ? TAKES_EFFECT[kind] : '', '**Undo** puts the file back.'].filter(Boolean).join(' ')
     case 'already':
       return `✓ ${path} already has this change. Nothing was written.`
     case 'undone':
@@ -233,12 +234,21 @@ export const applyNote = (rec: SetupRecommendation, state: ApplyState, applied?:
 
 const SHOWS_INSTRUCTION: readonly ApplyState[] = ['apply-failed', 'sent', 'filled', 'copied', 'copy-failed']
 
+// The note, and the diff while the change stands, for a card whose patch was pressed.
+export const appliedLines = (patch: Patch | undefined, state: ApplyState | undefined, applied?: AppliedPatch): string[] => [
+  ...(state ? ['', `> ${applyNote(patch, state, applied)}`] : []),
+  ...(state === 'applied' && applied?.diff ? ['', '```diff', applied.diff, '```'] : []),
+]
+
+// A fix that is still on disk but whose card is gone: the audit moved on, or the tip stopped firing.
+export const earlierFixCard = (applied: AppliedPatch, state: ApplyState): string =>
+  [`**${applied.title ?? 'An earlier fix'}**`, ...appliedLines(applied.patch, state, applied)].join('\n')
+
 export const recommendationCard = (rec: SetupRecommendation, state?: ApplyState, applied?: AppliedPatch): string =>
   [
     `### ${rec.title}`,
     `_Area: ${rec.area}_`,
-    ...(state ? ['', `> ${applyNote(rec, state, applied)}`] : []),
-    ...(state === 'applied' && applied?.diff ? ['', '```diff', applied.diff, '```'] : []),
+    ...appliedLines(rec.patch, state, applied),
     '',
     rec.problem,
     '',
