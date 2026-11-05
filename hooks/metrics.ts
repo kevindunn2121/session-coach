@@ -1,6 +1,8 @@
 import type { Category, FixWhen, Metrics, Priority, Score, Stage, Tip } from '../types'
 
-export type TipDraft = Omit<Tip, 'priority' | 'category' | 'stage'>
+import { tipPatch } from './apply'
+
+export type TipDraft = Omit<Tip, 'priority' | 'category' | 'stage' | 'patch'>
 
 export type TipRank = [Priority, Category, Stage]
 
@@ -343,10 +345,12 @@ export const RULE_CATALOG: readonly RuleEntry[] = Object.entries(TIP_RANK).map((
   stage,
 }))
 
+const withPatch = (patch: Tip['patch']): Pick<Tip, 'patch'> => (patch ? { patch } : {})
+
 export const finishTip = (tip: TipDraft, when: FixWhen | undefined, [priority, category, stage]: TipRank): Tip => ({
   ...tip,
   fix: when === undefined || tip.fix.when ? tip.fix : { ...tip.fix, when },
-  ...(tip.permanent ? { permanent: { ...tip.permanent, when: tip.permanent.when ?? 'later' } } : {}),
+  ...(tip.permanent ? { permanent: { ...tip.permanent, when: tip.permanent.when ?? 'later' }, ...withPatch(tipPatch(tip.permanent)) } : {}),
   priority,
   category,
   stage,

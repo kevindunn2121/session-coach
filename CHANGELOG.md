@@ -2,6 +2,13 @@
 
 All changes to session-coach, newest first. Pull request numbers up to #5 refer to the earlier repository `Nterlace-Solutions/session-coach`.
 
+## 0.9.0 (2026-11-04)
+
+- Live tips fix in one click, like setup audit cards. The "To make it stick" lines of the verify, unread-file, plan and subagent tips get **Fix**, which adds the line to `~/.claude/CLAUDE.md` under `## Session coach` with a backup and a diff, and **Undo**. The expert analysis can return the same kind of patch with a suggestion, and the plugin checks it with the same rules as the setup audit.
+- **Fix with Claude** on live tips sends the fix as your prompt in one click. Put in prompt and Copy stay, so you can still edit a fix first.
+- Undo survives a plugin reload and a new session. Before, the record of a fix lived only in memory, so a reload dropped the Undo button although the backup stayed on disk. The plugin now saves each fix to its store, the setup fixes with the audit fingerprint, and loads them at session start and when a pane opens.
+- A fix whose card is gone keeps its Undo under **Earlier fixes you can undo**: a tip that stopped showing, a setup card marked Done, or a recommendation a new audit no longer lists. When a new audit reuses an id for a different change, the earlier fix keeps its own Undo.
+
 ## 0.8.0 (2026-11-04)
 
 - Setup audit cards fix in one click. **Fix** applies a recommendation's patch itself: it saves a backup to `~/.claude/session-coach/backups/`, writes the file, and shows the diff and when the change takes effect. **Undo** puts the file back, unless you edited the file after the fix. When the change is already there, Fix writes nothing.

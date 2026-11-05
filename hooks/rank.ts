@@ -1,4 +1,4 @@
-import type { Category, Fix, Insight, Priority, SetupRecommendation, Stage, Tip } from '../types'
+import type { Category, Fix, Insight, Priority, Patch, SetupRecommendation, Stage, Tip } from '../types'
 
 export const PRIORITIES: readonly Priority[] = [1, 2, 3, 4]
 export const CATEGORIES: readonly Category[] = ['safety', 'cost', 'quality', 'context', 'workflow', 'git', 'setup']
@@ -96,6 +96,8 @@ export type RankedItem = {
   detail?: string
   fix?: Fix
   permanent?: Fix
+  // The one-click patch for the permanent fix, or for the fix when there is no permanent one.
+  patch?: Patch
 }
 
 export const rankedItems = (rules: Tip[], insights: Insight[]): RankedItem[] => {
@@ -109,6 +111,7 @@ export const rankedItems = (rules: Tip[], insights: Insight[]): RankedItem[] => 
       title: tip.text,
       fix: tip.fix,
       ...(tip.permanent ? { permanent: tip.permanent } : {}),
+      ...(tip.patch ? { patch: tip.patch } : {}),
     })),
     ...insights.map((insight, n): RankedItem => ({
       key: `insight-${n}`,
@@ -119,6 +122,7 @@ export const rankedItems = (rules: Tip[], insights: Insight[]): RankedItem[] => 
       title: insight.title,
       detail: `${insight.detail}${insight.name ? ` (${insight.kind}: ${insight.name})` : ''}`,
       ...(insight.fix ? { fix: insight.fix } : {}),
+      ...(insight.patch ? { patch: insight.patch } : {}),
     })),
   ]
   return items.map((item, order) => ({ item, order })).sort((a, b) => a.item.priority - b.item.priority || a.order - b.order).map(({ item }) => item)
