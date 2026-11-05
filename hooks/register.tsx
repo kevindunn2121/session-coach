@@ -1030,16 +1030,18 @@ export const register: Register = (on, options) => {
     )
     // A fix with a patch gets Fix and Undo, like a setup audit card, and Fix with Claude only when
     // the plugin cannot write it. A fix without one goes to Claude. Action fixes are steps for you.
+    // A side fix only fills the prompt box, so you read it before it starts a background subagent.
     const fixButtons = (key: string, fix: Fix, label: string, title: string, patch?: Patch) => {
       const state = patch ? tipStates[patchId(patch)] : undefined
       const canFix = state === undefined || state === 'undone'
-      const canSend = fix.kind !== 'action' && (patch === undefined || state === 'apply-failed')
+      const isSide = whenOf(fix) === 'side'
+      const canSend = !isSide && fix.kind !== 'action' && (patch === undefined || state === 'apply-failed')
       return (
         <Box key={`${key}-buttons`} flexDirection="row" gap={1}>
           {patch && canFix && <Button key={`${key}-fix`} variant="primary" label="Fix" onPress={() => fixTip($, patch, title)} />}
           {patch && state === 'applied' && <Button key={`${key}-undo`} label="Undo" onPress={() => undoTip($, patch)} />}
           {canSend && <Button key={`${key}-send`} variant={patch ? 'primary' : undefined} label="Fix with Claude" onPress={() => sendFix($, fix, label)} />}
-          <Button key={`${key}-fill`} label="Put in prompt" onPress={() => putFixInPrompt($, fix, label)} />
+          <Button key={`${key}-fill`} variant={isSide ? 'primary' : undefined} label={isSide ? 'Run on the side' : 'Put in prompt'} onPress={() => putFixInPrompt($, fix, label)} />
           <Button key={`${key}-copy`} label="Copy" onPress={press => copyText($, fixCopyText(fix), press.surface, label, 'prompt')} />
         </Box>
       )

@@ -19,7 +19,7 @@ export type TransparencyInput = {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-const WHEN_LABEL: Record<RuleEntry['when'], string> = { btw: 'Side question', steer: 'Steer now', next: 'Next prompt', interrupt: 'Stop first', later: 'After this session' }
+const WHEN_LABEL: Record<RuleEntry['when'], string> = { btw: 'Side question', side: 'On the side', steer: 'Steer now', next: 'Next prompt', interrupt: 'Stop first', later: 'After this session' }
 
 const PRIORITY_VAR: Record<Priority, string> = { 1: 'safety', 2: 'start', 3: 'verify', 4: 'build' }
 
