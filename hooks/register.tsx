@@ -27,6 +27,7 @@ import {
 import { fixCopyText, fixMarkdown, fixPromptText, promptedMessage, whenOf } from './fix'
 import { CATEGORY_COLOR, CATEGORY_LABEL, DEFAULT_PLAYBOOK_URL, PRIORITY_COLOR, PRIORITY_LABEL, STAGE_COLOR, STAGE_LABEL, priorityCounts, rankedItems, sortRecommendations, stageMarkdown } from './rank'
 import type { RankedItem } from './rank'
+import { MANIFEST_PATH, manifestVersion, versionFooter } from './version'
 import { addSpend, countPorcelain, parseShortstat, planWindows, vitalTips, vitalsLines } from './vitals'
 
 const PANE = 'session-coach'
@@ -62,6 +63,7 @@ const lastActionRef = atom({ plugin: 'session-coach', key: 'lastAction' } as con
 const isWorkingRef = atom({ plugin: 'session-coach', key: 'isWorking' } as const, false)
 const mapPathRef = atom({ plugin: 'session-coach', key: 'mapPath' } as const, '')
 const transparencyPathRef = atom({ plugin: 'session-coach', key: 'transparencyPath' } as const, '')
+const pluginVersionRef = atom({ plugin: 'session-coach', key: 'pluginVersion' } as const, '')
 
 type Config = {
   profile: string
@@ -724,11 +726,20 @@ const loadStoredTipFixes = async ($: EngineInterface): Promise<void> => {
   await update($, tipAppliedRef, () => ledger.applied)
 }
 
-// The panes read the Undo records from $.state. Load them from the store at session start and
+// The pane footers show the version in the manifest the engine loaded, so you can tell which
+// copy runs after /reload-plugins. A missing or broken manifest leaves the footer at the name.
+const loadVersion = async ($: EngineInterface): Promise<void> => {
+  const text = await $.fs.read(`${$.plugin.root}/${MANIFEST_PATH}`).catch(() => '')
+  const version = manifestVersion(typeof text === 'string' ? text : '')
+  await update($, pluginVersionRef, () => version)
+}
+
+// The panes read the Undo records and the version from $.state. Load them at session start and
 // again when a pane opens, since a plugin reload can come without a session start.
 const openPane = async ($: EngineInterface, id: string, title: string): Promise<void> => {
   await loadStoredSetup($)
   await loadStoredTipFixes($)
+  await loadVersion($)
   await $.ui.open({ id, title })
 }
 
@@ -786,6 +797,7 @@ export const register: Register = (on, options) => {
     await update($, auditingRef, () => false)
     await loadStoredSetup($)
     await loadStoredTipFixes($)
+    await loadVersion($)
     $.clock.after(8000, () => void runAudit($, false))
     $.clock.after(1500, () => void refreshPlanUsage($))
     $.clock.after(2000, () => void checkGit($))
@@ -1001,6 +1013,7 @@ export const register: Register = (on, options) => {
     const counts = priorityCounts(items)
     const tipStates = await read($, tipApplyStateRef)
     const tipApplied = await read($, tipAppliedRef)
+    const version = await read($, pluginVersionRef)
     const bar = (value: number) => '█'.repeat(Math.round(value / 2)) + '░'.repeat(10 - Math.round(value / 2))
 
     const nudgeFix: Fix | undefined = latest?.nudge ? { kind: 'prompt', text: latest.nudge, ...(latest.nudgeWhen ? { when: latest.nudgeWhen } : {}) } : undefined
@@ -1139,6 +1152,7 @@ export const register: Register = (on, options) => {
             ].join('\n')}
           />,
         ])}
+        <Text key="version" dimColor>{versionFooter($.plugin.name, version)}</Text>
       </Box>
     )
   })
@@ -1151,6 +1165,7 @@ export const register: Register = (on, options) => {
     const skipped = await read($, setupSkippedRef)
     const applyStates = await read($, setupApplyStateRef)
     const applied = await read($, setupAppliedRef)
+    const version = await read($, pluginVersionRef)
     const open =sortRecommendations(audit?.recommendations.filter(rec => !skipped.includes(rec.id)) ?? [])
     const counts = priorityCounts(open.map(rec => ({ priority: rec.priority ?? 3 })))
     const openIds = new Set(open.map(rec => rec.id))
@@ -1204,6 +1219,7 @@ export const register: Register = (on, options) => {
           <Button key="rerun" label={isAuditing ? 'Auditing…' : audit ? 'Re-run audit' : 'Run audit'} onPress={() => runAudit($, true)} />
           {skipped.length > 0 && <Button key="unskip" label={`Show ${skipped.length} skipped`} onPress={() => unskipAll($)} />}
         </Box>
+        <Text key="version" dimColor>{versionFooter($.plugin.name, version)}</Text>
       </Box>
     )
   })

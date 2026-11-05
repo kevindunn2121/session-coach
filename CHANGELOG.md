@@ -2,6 +2,10 @@
 
 All changes to session-coach, newest first. Pull request numbers up to #5 refer to the earlier repository `Nterlace-Solutions/session-coach`.
 
+## 0.11.0 (2026-11-05)
+
+- The Session coach and Setup audit panes end with a dim line showing the loaded version, such as `session-coach 0.11.0`, so after `/reload-plugins` you can tell which installed copy runs. The plugin reads the version from its own `.claude-plugin/plugin.json` at session start and when a pane opens, so the line cannot drift from the manifest.
+
 ## 0.10.0 (2026-11-05)
 
 - A sixth fix timing, **On the side**, for expert suggestions that do read-only work, such as a review, a check, a test run or a search. **Run on the side** puts the fix in your prompt box with an instruction to run it in a background subagent, so Claude keeps working on its task. The card has no Fix with Claude, so you read the fix before you send it. The analysis model picks the timing. Only a prompt fix can have it; any other kind keeps its default timing.

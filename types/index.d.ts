@@ -217,6 +217,7 @@ declare module 'claude-code' {
       isWorking: boolean
       mapPath: string
       transparencyPath: string
+      pluginVersion: string
     }
   }
 }
